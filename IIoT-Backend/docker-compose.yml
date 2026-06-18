@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # 1. Database (PostgreSQL) - Sesuai spesifikasi kamu
+  db:
+    image: postgres:15
+    container_name: iiot_postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: iiot_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Broker MQTT (Eclipse Mosquitto)
+  mqtt_broker:
+    image: eclipse-mosquitto:latest
+    container_name: iiot_mqtt_broker
+    ports:
+      - "1883:1883"  # Port MQTT dibuka untuk Windows laptop lu
+      - "9001:9001"  # Port WebSocket
+    restart: always
+    # 🌟 JALUR RESMI: Hubungkan file config lokal ke dalam container Docker
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mqtt_data:/mosquitto/data
+      - mqtt_log:/mosquitto/log
+
+  # 3. Backend API (FastAPI) - Tambahan pelengkap ekosistem
+  backend:
+    build: .
+    container_name: iiot_fastapi_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - mqtt_broker
+    environment:
+      # Menghubungkan FastAPI ke service 'db' dan 'mqtt_broker' di atas
+      - DB_HOST=db
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_NAME=iiot_db
+      - MQTT_HOST=mqtt_broker
+      - MQTT_PORT=1883
+
+# Volume agar data database dan MQTT logs tidak hilang saat container mati/restart
+volumes:
+  postgres_data:
+  mqtt_data:
+  mqtt_log:

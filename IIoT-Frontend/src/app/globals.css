@@ -1,0 +1,51 @@
+  /* 1. Wajib import inti Tailwind v4 terlebih dahulu */
+  @import "tailwindcss";
+
+  /* 2. MANTRA UTAMA: Daftarkan varian dark murni untuk Tailwind v4 */
+  @custom-variant dark (&:where(.dark, .dark *));
+
+  /* 3. Baru import css pihak ketiga (react-grid, map, dll) di bawahnya */
+  @import "react-grid-layout/css/styles.css";
+  @import "react-resizable/css/styles.css";
+
+  /* Handle Resize Utama (Pojok Kanan Bawah) */
+  .react-resizable-handle {
+    background-color: #3b82f6 !important;
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  /* Munculkan handle saat box di-hover atau sedang mode edit */
+  .react-grid-item:hover .react-resizable-handle {
+    opacity: 0.6;
+  }
+
+  /* Handle khusus sisi kanan (East) */
+  .react-resizable-handle-e {
+    width: 5px !important;
+    height: 40% !important;
+    top: 30% !important;
+    right: 0 !important;
+    cursor: e-resize;
+    background-color: #3b82f6 !important;
+  }
+
+  /* Placeholder saat kotak dipindahkan */
+  .react-grid-item.react-grid-placeholder {
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-radius: 12px !important;
+    border: 2px dashed #3b82f6 !important;
+  }
+
+  /* 4. Setingan transisi warna dasar body */
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .dark body {
+    background-color: #0f172a;
+    color: #f8fafc;
+  }
