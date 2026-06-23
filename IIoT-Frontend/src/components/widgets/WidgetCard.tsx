@@ -269,9 +269,16 @@ function WidgetEditForm({
             <input
               className={`${inp} font-mono text-blue-600 dark:text-blue-400`}
               placeholder="CHWS, CHWR, INVRTR"
+              // ✅ selalu tampilkan raw string, jangan join dari array
               value={item.keys?.length ? item.keys.join(", ") : item.key}
               onChange={(e) => {
                 const raw = e.target.value;
+                // ✅ jangan parse saat user masih mengetik koma atau spasi di akhir
+                if (raw.endsWith(",") || raw.endsWith(", ")) {
+                  // simpan sementara ke key sebagai raw string, tunggu user selesai ketik
+                  onUpdate(index, "key", raw);
+                  return;
+                }
                 const arr = raw.split(",").map((s) => s.trim()).filter(Boolean);
                 if (arr.length > 1) {
                   onUpdate(index, "keys", arr);
@@ -518,7 +525,7 @@ function AreaDisplay({ data, color, item }: {
   color: string;
   item: WidgetItem;
 }) {
-  const isMulti = (item.keys?.length ?? 0) > 1;
+  const isMulti = item.type === "chart" && (item.keys?.length ?? 0) > 1;
   const keys    = isMulti ? item.keys! : [item.key];
 
   const getColor = (i: number) => {
@@ -551,6 +558,7 @@ function AreaDisplay({ data, color, item }: {
             }}
             formatter={(value: any, name: string) => [value, isMulti ? name : item.key]}
             labelStyle={{ color: "#94a3b8", marginBottom: 4 }}
+            position={{ y: 0 }}
           />
           {keys.map((k, i) => (
             <Area
@@ -581,9 +589,11 @@ function BarDisplay({ data, color }: { data: { time: string; val: number }[]; co
           <XAxis dataKey="time" tick={{ fontSize: 8, fill: "#94a3b8" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
           <YAxis tick={{ fontSize: 8, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
           <Tooltip
-            contentStyle={{ fontSize: "10px", fontWeight: 700, borderRadius: "10px", border: "1px solid #e2e8f0", padding: "4px 8px" }}
-            itemStyle={{ color }}
-            cursor={{ fill: `${color}10` }}
+            contentStyle={{ fontSize: "10px", fontWeight: 700, borderRadius: "10px", border: "1px solid #e2e8f0", padding: "4px 8px", backgroundColor: "#fff" }}
+            formatter={(value: any) => [value, "val"]}
+            labelStyle={{ color: "#94a3b8", marginBottom: 2 }}
+            cursor={{ fill: `${color}15` }}
+            position={{ y: 0 }}
           />
           <Bar dataKey="val" fill={color} radius={[3, 3, 0, 0]} />
         </BarChart>

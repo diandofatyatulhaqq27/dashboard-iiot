@@ -71,7 +71,7 @@ export function getActiveRange(rangeValue?: string) {
 export function getChartData(item: WidgetItem, logs: any[]) {
   const rangeOpt = getActiveRange(item.range);
   const cutoff   = Date.now() - rangeOpt.ms;
-  const isMulti  = (item.keys?.length ?? 0) > 1;
+  const isMulti  = item.type === "chart" && (item.keys?.length ?? 0) > 1;
 
   const filtered = logs.filter((l) => l.created_at && new Date(l.created_at).getTime() >= cutoff);
   const sampled  = filtered.length > 200
@@ -89,7 +89,7 @@ export function getChartData(item: WidgetItem, logs: any[]) {
       return point;
     }
 
-    // single key — selalu return { time, val }
+    // single key (area single atau bar) — selalu { time, val }
     return { time, val: Number(l.payload?.[item.key] ?? 0) };
   });
 }
