@@ -219,7 +219,10 @@ function GaugeDisplay({ value, unit, color, min, max, decimals }: {
 
   return (
     <div className="flex flex-col items-center mt-1">
-      <svg width="140" height="100" viewBox="0 0 110 80">
+      <svg
+        viewBox="0 0 110 80"
+        className="w-full max-w-[140px]"
+        >
         <path d={bgPath} fill="none" stroke="#e2e8f0" strokeWidth="8" strokeLinecap="round" className="dark:stroke-slate-700" />
         {fillPath && <path d={fillPath} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" />}
         <text x={cx} y={cy + 10} textAnchor="middle" fontSize="20" fontWeight="900" fill={color}>{formatVal(value, decimals)}</text>

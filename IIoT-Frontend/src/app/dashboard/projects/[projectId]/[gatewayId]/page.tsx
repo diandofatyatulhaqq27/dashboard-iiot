@@ -20,7 +20,7 @@ const GridLayout = ReactGridLayout as any;
 
 function itemToLayout(item: WidgetItem, index: number): RGLLayout {
   const gp = item.gridPos ?? defaultGridPos(item.type, index);
-  return { i: String(index), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 2, minH: 2 };
+  return { i: String(index), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 1, minH: 1 };
 }
 
 type RGLLayout = {
@@ -359,6 +359,7 @@ export default function GatewayDetailPage() {
                 ? "w-72 opacity-100"
                 : "w-56 opacity-100"
             }`}>
+
             <div className="sticky top-20 space-y-3">
 
               {/* Settings panel — muncul saat panel dipilih */}
