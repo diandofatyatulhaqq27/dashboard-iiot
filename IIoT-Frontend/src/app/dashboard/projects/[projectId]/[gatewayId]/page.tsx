@@ -30,7 +30,7 @@ type RGLLayout = {
 
 function itemToLayout(item: WidgetItem, index: number): RGLLayout {
   const gp = item.gridPos ?? defaultGridPos(item.type, index);
-  return { i: String(index), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 1, minH: 1 };
+  return { i: String(index), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 2, minH: 1.5 };
 }
 
 export default function GatewayDetailPage() {
@@ -166,7 +166,7 @@ export default function GatewayDetailPage() {
     const gp = defaultGridPos("value", newIdx);
     newItem.gridPos = gp;
     const newConfig  = [...editConfig, newItem];
-    const newLayouts: RGLLayout[] = [...layouts, { i: String(newIdx), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 1, minH: 1 }];
+    const newLayouts: RGLLayout[] = [...layouts, { i: String(newIdx), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 2, minH: 1.5 }];
     setEditConfig(newConfig);
     setLayouts(newLayouts);
     setSelectedIdx(newIdx);
