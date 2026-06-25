@@ -21,67 +21,82 @@ function timeAgo(dateStr?: string | null): string {
   return `${Math.floor(diffSec / 86400)}d ago`;
 }
 
-type Period = "hourly" | "daily" | "monthly" | "annually";
+type Period = "hourly" | "daily" | "monthly";
 
-// ✅ Fix: pakai triggered_at (field dari AlarmHistory)
 function buildChartData(alarms: any[], period: Period) {
   const now = Date.now();
 
   if (period === "hourly") {
+    const currentHour = new Date();
+    currentHour.setMinutes(0, 0, 0);
+
     return Array.from({ length: 24 }, (_, i) => {
-      const slotStart = now - (23 - i) * 3_600_000;
-      const slotEnd   = slotStart + 3_600_000;
+      const slotStart =
+        currentHour.getTime() - (23 - i) * 3_600_000;
+
+      const slotEnd = slotStart + 3_600_000;
+
       const count = alarms.filter((a) => {
         const t = new Date(a.triggered_at ?? 0).getTime();
         return t >= slotStart && t < slotEnd;
       }).length;
-      const h = new Date(slotStart).getHours();
-      return { label: `${h.toString().padStart(2, "0")}:00`, alarms: count };
+
+      const d = new Date(slotStart);
+
+      return {
+        label: `${d.getHours().toString().padStart(2, "0")}:00`,
+        alarms: count,
+      };
     });
   }
 
   if (period === "daily") {
     return Array.from({ length: 30 }, (_, i) => {
-      const slotStart = now - (29 - i) * 86_400_000;
-      const slotEnd   = slotStart + 86_400_000;
+      const slotStart =
+        now - (29 - i) * 86_400_000;
+
+      const slotEnd = slotStart + 86_400_000;
+
       const count = alarms.filter((a) => {
         const t = new Date(a.triggered_at ?? 0).getTime();
         return t >= slotStart && t < slotEnd;
       }).length;
+
       const d = new Date(slotStart);
-      return { label: String(d.getDate()), alarms: count };
+
+      return {
+        label: `${d.getDate()}`,
+        alarms: count,
+      };
     });
   }
 
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  if (period === "monthly") {
-    return Array.from({ length: 12 }, (_, i) => {
+  const MONTHS = [
+    "Jan","Feb","Mar","Apr","May","Jun",
+    "Jul","Aug","Sep","Oct","Nov","Dec"
+  ];
+
+  return Array.from({ length: 12 }, (_, i) => {
     const d = new Date();
+
     d.setMonth(d.getMonth() - (11 - i));
-    const y = d.getFullYear(), m = d.getMonth();
+
+    const y = d.getFullYear();
+    const m = d.getMonth();
+
     const slotStart = new Date(y, m, 1).getTime();
-    const slotEnd   = new Date(y, m + 1, 1).getTime();
+    const slotEnd = new Date(y, m + 1, 1).getTime();
+
     const count = alarms.filter((a) => {
       const t = new Date(a.triggered_at ?? 0).getTime();
       return t >= slotStart && t < slotEnd;
     }).length;
-    return { label: MONTHS[m], alarms: count };
-  });
-}
 
-  
-  return Array.from({ length: 5 }, (_, i) => {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - (4 - i));
-  const y = d.getFullYear();
-  const slotStart = new Date(y, 0, 1).getTime();
-  const slotEnd   = new Date(y + 1, 0, 1).getTime();
-  const count = alarms.filter((a) => {
-    const t = new Date(a.triggered_at ?? 0).getTime();
-    return t >= slotStart && t < slotEnd;
-  }).length;
-  return { label: String(y), alarms: count };
-});
+    return {
+      label: MONTHS[m],
+      alarms: count,
+    };
+  });
 }
 
 function CustomTooltip({ active, payload, label }: any) {
@@ -217,11 +232,10 @@ export default function MonitoringPage() {
   // ✅ chart pakai alarmHistory bukan alarms
   const chartData = buildChartData(alarmHistory, chartPeriod);
 
-  const periodLabel: Record<Period, string> = {
-    hourly:   "Last 1 hour · per minute",
-    daily:    "Last 24 hours · per hour",
-    monthly:  "Last 30 days · per day",
-    annually: "Last 12 months · per month",
+  const periodLabel = {
+    hourly: "Last 24 hours · per hour",
+    daily: "Last 30 days · per day",
+    monthly: "Last 12 months · per month",
   };
 
   return (
@@ -278,7 +292,7 @@ export default function MonitoringPage() {
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{periodLabel[chartPeriod]}</p>
           </div>
           <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg">
-            {(["hourly", "daily", "monthly", "annually"] as Period[]).map((p) => (
+            {(["hourly", "daily", "monthly"] as Period[]).map((p) => (
               <button
                 key={p}
                 onClick={() => setChartPeriod(p)}
@@ -288,7 +302,7 @@ export default function MonitoringPage() {
                     : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 }`}
               >
-                {p === "hourly" ? "Hourly" : p === "daily" ? "Daily" : p === "monthly" ? "Monthly" : "Annually"}
+                {p === "hourly" ? "Hourly" : p === "daily" ? "Daily" : "Monthly"}
               </button>
             ))}
           </div>
@@ -313,10 +327,7 @@ export default function MonitoringPage() {
                   tick={{ fontSize: 10, fill: "#9ca3af" }}
                   axisLine={false}
                   tickLine={false}
-                  interval={
-                    chartPeriod === "hourly"   ? 9  :
-                    chartPeriod === "monthly"  ? 4  : 0
-                  }
+                  interval={ 0 }
                 />
                 <YAxis
                   allowDecimals={false}
