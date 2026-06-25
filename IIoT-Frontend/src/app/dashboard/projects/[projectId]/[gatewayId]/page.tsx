@@ -14,7 +14,7 @@ import { WidgetItem, getLatestPayload, defaultGridPos } from "@/lib/widget-confi
 import { WidgetCard, WidgetSettingsPanel } from "@/components/widgets/WidgetCard";
 
 // ─── Grid config ─────────────────────────────────────────────────────────────
-const COLS  = 24;
+const COLS  = 48;
 const ROW_H = 80;
 const GridLayout = ReactGridLayout as any;
 
@@ -30,7 +30,7 @@ type RGLLayout = {
 
 function itemToLayout(item: WidgetItem, index: number): RGLLayout {
   const gp = item.gridPos ?? defaultGridPos(item.type, index);
-  return { i: String(index), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 3, minH: 2 };
+  return { i: String(index), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 1, minH: 1 };
 }
 
 export default function GatewayDetailPage() {
@@ -166,7 +166,7 @@ export default function GatewayDetailPage() {
     const gp = defaultGridPos("value", newIdx);
     newItem.gridPos = gp;
     const newConfig  = [...editConfig, newItem];
-    const newLayouts: RGLLayout[] = [...layouts, { i: String(newIdx), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 3, minH: 2 }];
+    const newLayouts: RGLLayout[] = [...layouts, { i: String(newIdx), x: gp.x, y: gp.y, w: gp.w, h: gp.h, minW: 1, minH: 1 }];
     setEditConfig(newConfig);
     setLayouts(newLayouts);
     setSelectedIdx(newIdx);
