@@ -233,9 +233,9 @@ export default function MonitoringPage() {
   const chartData = buildChartData(alarmHistory, chartPeriod);
 
   const periodLabel = {
-    hourly: "Last 24 hours · per hour",
-    daily: "Last 30 days · per day",
-    monthly: "Last 12 months · per month",
+    hourly: "Past 24 hours",
+    daily: "Past 30 days",
+    monthly: "Past 12 months",
   };
 
   return (
