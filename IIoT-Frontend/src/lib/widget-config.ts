@@ -20,6 +20,8 @@ export interface WidgetItem {
   keys?: string[];
   colors?: string[];
   keyDecimals?: number[];
+  /** Pembagi nilai per key untuk area chart multi-key */
+  keyDivisors?: number[];
   label: string;
   type: WidgetType;
   unit?: string;
@@ -29,12 +31,25 @@ export interface WidgetItem {
   max?: number;
   onValue?: string;
   color?: string;
-  decimals?: number;
+  /**
+   * Pembagi nilai raw dari sensor.
+   * Contoh: raw=300, divisor=10 → nilai tampil = 30
+   * Default: 1 (tidak dibagi)
+   */
+  divisor?: number;
+  /**
+   * Jumlah digit desimal yang ditampilkan setelah dibagi.
+   * -1 = Auto (tampil apa adanya)
+   *  0 = bulat
+   *  1 = 0.0
+   *  2 = 0.00
+   */
+  decimalPlaces?: number;
   thresholds?: ThresholdItem[];
   gridPos?: GridPos;
 }
 
-// ─── Widget type metadata ────────────────────────────────────────────────────
+// ─── Widget type metadata ─────────────────────────────────────────────────────
 
 export const WIDGET_TYPES: {
   value: WidgetType;
@@ -51,33 +66,60 @@ export const WIDGET_TYPES: {
   { value: "bar",    label: "Bar",    desc: "Grafik batang historis",   icon: "bar",         defaultSize: "medium" },
 ];
 
-// ─── Default grid sizes per type ─────────────────────────────────────────────
-//
-// Grid total = 80 kolom, rowHeight = 80px
-// Layout target:
-//   - Widget kecil (value/gauge/status/trend): w=20 (¼ lebar), h=3 (~240px)
-//   - Widget chart/bar: w=40 (½ lebar), h=4 (~320px)
-//
-// Auto-placement: 4 kolom untuk widget kecil, 2 kolom untuk chart
-// Baris baru otomatis setelah 4 widget kecil atau 2 chart
+// ─── Value transform helper ───────────────────────────────────────────────────
+
+/**
+ * Terapkan divisor lalu format ke decimalPlaces.
+ * Contoh: applyTransform(300, 10, 1) → "30.0"
+ *         applyTransform(300, 1, -1)  → "300"
+ *         applyTransform(300, 10, 0)  → "30"
+ */
+export function applyTransform(
+  value: any,
+  divisor?: number,
+  decimalPlaces?: number
+): string {
+  if (value === null || value === undefined) return "—";
+  const num = Number(value);
+  if (isNaN(num)) return String(value);
+
+  const div    = divisor && divisor !== 0 ? divisor : 1;
+  const result = num / div;
+
+  if (decimalPlaces === undefined || decimalPlaces < 0) {
+    // Auto: hilangkan trailing zero yang tidak perlu
+    return String(parseFloat(result.toPrecision(10)));
+  }
+  return result.toFixed(decimalPlaces);
+}
+
+/**
+ * Terapkan divisor ke nilai numerik (tanpa format string).
+ * Dipakai untuk kalkulasi threshold, gauge fill, dll.
+ */
+export function applyDivisor(value: any, divisor?: number): number {
+  const num = Number(value ?? 0);
+  if (isNaN(num)) return 0;
+  const div = divisor && divisor !== 0 ? divisor : 1;
+  return num / div;
+}
+
+// ─── Default grid sizes ───────────────────────────────────────────────────────
 
 export function defaultGridPos(type: WidgetType, index: number): GridPos {
   const isWide = type === "chart" || type === "bar";
-
   if (isWide) {
-    // Chart: 2 per baris, w=40, h=4
     const col = index % 2;
     const row = Math.floor(index / 2);
     return { x: col * 40, y: row * 4, w: 40, h: 4 };
   } else {
-    // Widget kecil: 4 per baris, w=20, h=3
     const col = index % 4;
     const row = Math.floor(index / 4);
     return { x: col * 20, y: row * 3, w: 20, h: 3 };
   }
 }
 
-// ─── Size (legacy, masih dipakai untuk fallback) ──────────────────────────────
+// ─── Size (legacy) ────────────────────────────────────────────────────────────
 
 export const SIZE_OPTIONS = [
   { value: "small",  label: "Kecil",  colSpan: "col-span-1"                  },
@@ -91,7 +133,7 @@ export function getSizeClass(size: string | undefined, type: WidgetType): string
   return type === "chart" || type === "bar" ? "md:col-span-2" : "col-span-1";
 }
 
-// ─── Range ───────────────────────────────────────────────────────────────────
+// ─── Range ────────────────────────────────────────────────────────────────────
 
 export const RANGE_OPTIONS = [
   { value: "1h",  label: "1 Jam",   ms: 60 * 60 * 1000           },
@@ -105,15 +147,19 @@ export function getActiveRange(rangeValue?: string) {
   return RANGE_OPTIONS.find((r) => r.value === (rangeValue ?? "1h")) ?? RANGE_OPTIONS[0];
 }
 
-// ─── Threshold helper ─────────────────────────────────────────────────────────
+// ─── Threshold ────────────────────────────────────────────────────────────────
 
+/**
+ * Threshold dibandingkan terhadap nilai SETELAH dibagi divisor.
+ */
 export function resolveThresholdColor(
   value: any,
   thresholds: ThresholdItem[] | undefined,
-  baseColor: string
+  baseColor: string,
+  divisor?: number
 ): string {
   if (!thresholds || thresholds.length === 0) return baseColor;
-  const num = Number(value);
+  const num = applyDivisor(value, divisor);
   if (isNaN(num)) return baseColor;
   const sorted = [...thresholds].sort((a, b) => a.value - b.value);
   let active = baseColor;
@@ -131,9 +177,7 @@ export function getChartData(item: WidgetItem, logs: any[]) {
   const isMulti  = item.type === "chart" && (item.keys?.length ?? 0) > 1;
 
   const filtered = logs.filter((l) => l.created_at && new Date(l.created_at).getTime() >= cutoff);
-
-  // Ambil 200 data terakhir agar chart selalu menampilkan data terbaru
-  const sampled = filtered.length > 200 ? filtered.slice(-200) : filtered;
+  const sampled  = filtered.length > 200 ? filtered.slice(-200) : filtered;
 
   return sampled.map((l) => {
     const time = rangeOpt.ms > 24 * 60 * 60 * 1000
@@ -142,15 +186,26 @@ export function getChartData(item: WidgetItem, logs: any[]) {
 
     if (isMulti) {
       const point: any = { time };
-      item.keys!.forEach((k) => { point[k] = Number(l.payload?.[k] ?? 0); });
+      item.keys!.forEach((k, i) => {
+        const raw = Number(l.payload?.[k] ?? 0);
+        const div = item.keyDivisors?.[i] ?? 1;
+        point[k] = div && div !== 0 ? raw / div : raw;
+      });
       return point;
     }
-    return { time, val: Number(l.payload?.[item.key] ?? 0) };
+
+    const raw = Number(l.payload?.[item.key] ?? 0);
+    const div = item.divisor ?? 1;
+    return { time, val: div && div !== 0 ? raw / div : raw };
   });
 }
 
 export function getSparklineData(item: WidgetItem, logs: any[]) {
-  return logs.slice(-20).map((l) => ({ val: Number(l.payload?.[item.key] ?? 0) }));
+  return logs.slice(-20).map((l) => {
+    const raw = Number(l.payload?.[item.key] ?? 0);
+    const div = item.divisor ?? 1;
+    return { val: div && div !== 0 ? raw / div : raw };
+  });
 }
 
 export function getLatestPayload(logs: any[]): Record<string, any> {
