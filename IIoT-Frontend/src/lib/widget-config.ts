@@ -220,7 +220,6 @@ export function getLatestPayload(logs: any[]): Record<string, any> {
 export function isStatusOn(value: any, onValue?: string): boolean {
   if (value === null || value === undefined) return false;
   const v = String(value).toLowerCase().trim();
-  if (onValue) return v === onValue.toLowerCase().trim();
   return v === "1" || v === "true" || v === "on" || v === "yes";
 }
 

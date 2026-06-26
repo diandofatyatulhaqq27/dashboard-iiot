@@ -245,7 +245,7 @@ function GaugeDisplay({ rawValue, unit, color, min, max, divisor, decimalPlaces 
 function StatusDisplay({ rawValue, label, color, onValue, isOnline }: {
   rawValue: any; label: string; color: string; onValue?: string; isOnline: boolean;
 }) {
-  const on = isOnline && isStatusOn(rawValue, onValue);
+  const on = isOnline && isStatusOn(rawValue);
   return (
     <div className="flex flex-col items-center gap-3">
       <div className={`relative w-14 h-7 rounded-full transition-all duration-300 ${on ? "" : "bg-slate-200 dark:bg-slate-700"}`}
@@ -575,16 +575,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
               <input type="number" className={inp} placeholder="100" value={item.max ?? ""}
                 onChange={(e) => onUpdate(index, "max", Number(e.target.value))} />
             </div>
-          </div>
-        )}
-
-        {/* Status ON value */}
-        {isStatus && (
-          <div>
-            <label className={lbl}>Nilai "ON"</label>
-            <input className={inp} placeholder="1 / true / on" value={item.onValue ?? ""}
-              onChange={(e) => onUpdate(index, "onValue", e.target.value)} />
-            <p className="text-[9px] text-slate-400 mt-1">Nilai MQTT yang dianggap aktif/menyala</p>
           </div>
         )}
 
