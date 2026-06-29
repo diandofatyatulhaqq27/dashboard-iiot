@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import Gateway, Project, TelemetryLog
 from app.routers.auth import get_current_user
 from typing import Optional, List, Any
+from sqlalchemy import text
 
 router = APIRouter(prefix="/api/gateways", tags=["Gateways"])
 
@@ -18,6 +19,14 @@ class GatewaySchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+RANGE_CONFIG = {
+    "1h":  {"interval": "NOW() - INTERVAL '1 hour'",   "bucket_secs": 60},    # per 1 menit
+    "6h":  {"interval": "NOW() - INTERVAL '6 hours'",  "bucket_secs": 3600},  # per 1 jam
+    "24h": {"interval": "NOW() - INTERVAL '24 hours'", "bucket_secs": 3600},  # per 1 jam
+    "7d":  {"interval": "NOW() - INTERVAL '7 days'",   "bucket_secs": 86400}, # per 1 hari
+    "30d": {"interval": "NOW() - INTERVAL '30 days'",  "bucket_secs": 86400}, # per 1 hari
+}
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_gateway(gateway: GatewaySchema, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -52,46 +61,64 @@ def get_gateways(db: Session = Depends(get_db), current_user: dict = Depends(get
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{gateway_id}")
-def get_gateway(gateway_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+@router.get("/{gateway_id}/chart")
+def get_gateway_chart(
+    gateway_id: int,
+    range: str = "1h",
+    keys: str = "",
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     gateway = db.query(Gateway).filter(Gateway.gateway_id == gateway_id).first()
     if not gateway:
         raise HTTPException(status_code=404, detail="Gateway tidak ditemukan")
 
-    logs = (
-        db.query(TelemetryLog)
-        .filter(TelemetryLog.gateway_id == gateway_id)
-        # ✅ FIX: desc() → dapat 1000 data TERBARU, bukan terlama
-        .order_by(TelemetryLog.created_at.desc())
-        .limit(1000)
-        .all()
-    )
+    cfg = RANGE_CONFIG.get(range, RANGE_CONFIG["1h"])
+    cutoff_expr = cfg["interval"]
+    bucket_secs = cfg["bucket_secs"]
 
-    # ✅ FIX: balik urutan ke asc sebelum dikirim ke frontend
-    # supaya chart bisa plot dari kiri (lama) ke kanan (baru)
-    logs_asc = list(reversed(logs))
+    key_list = [k.strip() for k in keys.split(",") if k.strip()] if keys else []
+    if not key_list:
+        return {"status": "success", "data": []}
 
-    return {
-        "status": "success",
-        "data": {
-            "gateway_id": gateway.gateway_id,
-            "name": gateway.name,
-            "hmi_code": gateway.hmi_code,
-            "status": gateway.status,
-            "last_ping": gateway.last_ping,
-            "project_id": gateway.project_id,
-            "config": gateway.config if gateway.config is not None else [],
-            "logs": [
-                {
-                    "id": l.id,
-                    "created_at": l.created_at.isoformat() if l.created_at else None,
-                    "payload": l.payload,
-                    "gateway_id": l.gateway_id,
-                }
-                for l in logs_asc
-            ]
-        }
-    }
+    try:
+        # Buat klausa SELECT rata-rata dinamis untuk setiap key JSON payload
+        select_parts = ", ".join([
+            f"AVG((payload->>'{k}')::float) AS \"{k}\""
+            for k in key_list
+        ])
+
+        # Query matematika bucket interval waktu (Time-bucketing di PostgreSQL)
+        sql = text(f"""
+            SELECT
+                date_trunc('minute', created_at) 
+                    + (FLOOR(EXTRACT(EPOCH FROM (created_at - date_trunc('minute', created_at))) / :bucket_secs) * :bucket_secs || ' seconds')::interval AS bucket,
+                {select_parts}
+            FROM telemetry_logs
+            WHERE gateway_id = :gateway_id
+              AND created_at >= {cutoff_expr}
+            GROUP BY bucket
+            ORDER BY bucket ASC
+        """)
+
+        rows = db.execute(sql, {
+            "gateway_id": gateway_id,
+            "bucket_secs": bucket_secs,
+        }).fetchall()
+
+        result = []
+        for row in rows:
+            # row[0] adalah waktu bucket, row[1:] adalah nilai dari keys
+            point = {"time": row[0].isoformat() if row[0] else None}
+            for i, k in enumerate(key_list):
+                val = row[i + 1]
+                point[k] = round(float(val), 4) if val is not None else None
+            result.append(point)
+
+        return {"status": "success", "data": result}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database aggregation error: {str(e)}")
 
 @router.put("/{gateway_id}")
 def update_gateway(gateway_id: int, payload: GatewaySchema, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):

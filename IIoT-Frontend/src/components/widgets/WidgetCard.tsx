@@ -37,12 +37,13 @@ interface WidgetCardProps {
   logs: any[];
   latestPayload: Record<string, any>;
   onSelect: (index: number) => void;
+  serverChartData?: any[];
 }
 
 // ─── Root card ───────────────────────────────────────────────────────────────
 
 export function WidgetCard({
-  item, index, isEditMode, isSelected, isOnline, logs, latestPayload, onSelect,
+  item, index, isEditMode, isSelected, isOnline, logs, latestPayload, onSelect, serverChartData = [],
 }: WidgetCardProps) {
   const isChart     = item.type === "chart" || item.type === "bar";
   const color       = item.color ?? defaultColor(item.type);
@@ -50,21 +51,54 @@ export function WidgetCard({
   const activeColor = resolveThresholdColor(rawValue, item.thresholds, color, item.divisor);
 
   const chartData = useMemo(() => {
-  if (!isChart) return [];
-  const data = getChartData(item, logs);
-  console.log("CHART DEBUG:", {
-    label: item.label,
-    key: item.key,
-    keys: item.keys,
-    range: item.range,
-    logsCount: logs.length,
-    sampleLog: logs[logs.length - 1],
-    chartDataCount: data.length,
-    chartDataSample: data[0],
-  });
-  return data;
-}, [item, logs, isChart]);
-  
+    if (!isChart) return [];
+
+    // JIKA ADA DATA AGREGASI DARI BACKEND, GUNAKAN LANGSUNG (Format Waktu disesuaikan otomatis)
+    if (serverChartData && serverChartData.length > 0) {
+      const isMulti = item.type === "chart" && (item.keys?.length ?? 0) > 1;
+      const divisors = item.keyDivisors ?? [];
+
+      return serverChartData.map((d) => {
+        const dateObj = new Date(d.time);
+        let formattedTime = "";
+
+        if (item.range === "7d" || item.range === "30d") {
+          formattedTime = dateObj.toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "short",
+            timeZone: "Asia/Jakarta"
+          });
+        } else {
+          formattedTime = dateObj.toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Asia/Jakarta"
+          });
+        }
+
+        if (isMulti && item.keys) {
+          const updatedPoint: Record<string, any> = { time: formattedTime };
+          item.keys.forEach((k, idx) => {
+            const div = divisors[idx] ?? item.divisor ?? 1;
+            const val = d[k];
+            updatedPoint[k] = val !== null && val !== undefined ? Number(val) / (div || 1) : null;
+          });
+          return updatedPoint;
+        }
+
+        const div = item.divisor ?? 1;
+        const val = d[item.key];
+        return {
+          time: formattedTime,
+          val: val !== null && val !== undefined ? Number(val) / (div || 1) : null,
+        };
+      });
+    }
+
+    // FALLBACK: Gunakan kalkulasi lokal lama jika data dari endpoint chart belum terisi
+    return getChartData(item, logs);
+  }, [item, logs, isChart, serverChartData]);
+
   const sparkData = useMemo(() => item.type === "trend" ? getSparklineData(item, logs) : [], [item, logs]);
 
   return (
