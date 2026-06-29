@@ -49,7 +49,22 @@ export function WidgetCard({
   const rawValue    = latestPayload[item.key];
   const activeColor = resolveThresholdColor(rawValue, item.thresholds, color, item.divisor);
 
-  const chartData = useMemo(() => isChart ? getChartData(item, logs) : [], [item, logs, isChart]);
+  const chartData = useMemo(() => {
+  if (!isChart) return [];
+  const data = getChartData(item, logs);
+  console.log("CHART DEBUG:", {
+    label: item.label,
+    key: item.key,
+    keys: item.keys,
+    range: item.range,
+    logsCount: logs.length,
+    sampleLog: logs[logs.length - 1],
+    chartDataCount: data.length,
+    chartDataSample: data[0],
+  });
+  return data;
+}, [item, logs, isChart]);
+  
   const sparkData = useMemo(() => item.type === "trend" ? getSparklineData(item, logs) : [], [item, logs]);
 
   return (
