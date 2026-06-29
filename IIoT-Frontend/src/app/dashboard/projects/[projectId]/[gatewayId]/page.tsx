@@ -47,7 +47,6 @@ export default function GatewayDetailPage() {
   const [editConfig,      setEditConfig]      = useState<WidgetItem[]>([]);
   const [selectedIdx,     setSelectedIdx]     = useState<number | null>(null);
   const [layouts,         setLayouts]         = useState<RGLLayout[]>([]);
-  const [chartDataMap,    setChartDataMap]    = useState<Record<string, any[]>>({});
   const [containerWidth,  setContainerWidth]  = useState(1200);
 
   // ── Floating panel state ──────────────────────────────────────────────────
@@ -100,42 +99,6 @@ export default function GatewayDetailPage() {
     return () => obs.disconnect();
   }, []);
 
-  const fetchChartDataForWidgets = useCallback(async (configList: WidgetItem[]) => {
-    if (!gatewayId || !configList || configList.length === 0) return;
-
-    const chartWidgets = configList.filter(item => item.type === "chart" || item.type === "bar");
-    if (chartWidgets.length === 0) return;
-
-    const newChartDataMap: Record<string, any[]> = {};
-
-    await Promise.all(
-      chartWidgets.map(async (item, idx) => {
-        const isMulti = item.type === "chart" && (item.keys?.length ?? 0) > 1;
-        const keysParam = isMulti ? item.keys!.join(",") : item.key;
-        const rangeParam = item.range ?? "1h";
-
-        if (!keysParam) return;
-
-        try {
-          const res = await fetch(
-            `${API_BASE}/gateways/${gatewayId}/chart?range=${rangeParam}&keys=${keysParam}`,
-            { method: "GET", cache: "no-store", headers: getAuthHeaders() }
-          );
-          if (res.ok) {
-            const r = await res.json();
-            // Simpan dengan key kombinasi unik agar data antar-widget aman
-            const mapKey = `${item.type}-${idx}-${item.key}`;
-            newChartDataMap[mapKey] = r.data ?? [];
-          }
-        } catch (err) {
-          console.error(`Gagal fetch chart backend untuk indeks ${idx}:`, err);
-        }
-      })
-    );
-
-    setChartDataMap(prev => ({ ...prev, ...newChartDataMap }));
-  }, [gatewayId]);
-
   const fetchAllData = useCallback(async () => {
     if (!projectId || !gatewayId) return;
     try {
@@ -151,14 +114,11 @@ export default function GatewayDetailPage() {
         if (data) {
           setGatewayInfo(data);
           setLogs(data.logs ?? []);
-          const cfg: WidgetItem[] = data.config ?? [];
           if (!isEditMode) {
+            const cfg: WidgetItem[] = data.config ?? [];
             setEditConfig(cfg);
             setLayouts(cfg.map((item, i) => itemToLayout(item, i)));
           }
-          
-          // 👈 TAMBAHKAN PEMANGGILAN INI DI SINI
-          fetchChartDataForWidgets(isEditMode ? editConfig : cfg);
         }
       }
       if (resProject.ok) {
@@ -227,14 +187,10 @@ export default function GatewayDetailPage() {
     setEditConfig((prev) => {
       const updated = [...prev];
       (updated[i] as any)[field] = val;
-      
-      // 👈 JALANKAN FETCH ULANG JIKA PARAMETER GRAFIK BERUBAH
-      if (field === "range" || field === "key" || field === "keys") {
-        fetchChartDataForWidgets(updated);
-      }
       return updated;
     });
   };
+
   const handleSaveConfig = async () => {
     if (isReadOnly) return alert("Akses ditolak!");
     try {
@@ -444,36 +400,29 @@ export default function GatewayDetailPage() {
                 containerPadding={[0, 0]}
                 resizeHandles={["se"]}
               >
-                {editConfig.map((item, index) => {
-                  // 1. Ambil data agregasi chart menggunakan mapKey unik di dalam scope fungsi map
-                  const mapKey = `${item.type}-${index}-${item.key}`;
-                  const backendChartData = chartDataMap[mapKey] || [];
-
-                  return (
-                    <div key={String(index)} className="relative">
-                      {isEditMode && (
-                        <div className="drag-handle absolute top-0 left-0 right-0 h-7 z-10 cursor-grab active:cursor-grabbing flex items-center px-3 gap-1.5 bg-slate-900/5 dark:bg-white/5 rounded-t-2xl">
-                          <div className="flex gap-0.5">
-                            {[...Array(6)].map((_, i) => (
-                              <div key={i} className="w-0.5 h-3 bg-slate-400/40 dark:bg-slate-500/40 rounded-full" />
-                            ))}
-                          </div>
+                {editConfig.map((item, index) => (
+                  <div key={String(index)} className="relative">
+                    {isEditMode && (
+                      <div className="drag-handle absolute top-0 left-0 right-0 h-7 z-10 cursor-grab active:cursor-grabbing flex items-center px-3 gap-1.5 bg-slate-900/5 dark:bg-white/5 rounded-t-2xl">
+                        <div className="flex gap-0.5">
+                          {[...Array(6)].map((_, i) => (
+                            <div key={i} className="w-0.5 h-3 bg-slate-400/40 dark:bg-slate-500/40 rounded-full" />
+                          ))}
                         </div>
-                      )}
-                      <WidgetCard
-                        item={item}
-                        index={index}
-                        isEditMode={isEditMode}
-                        isSelected={selectedIdx === index}
-                        isOnline={isOnline}
-                        logs={logs}
-                        latestPayload={latestPayload}
-                        onSelect={setSelectedIdx}
-                        serverChartData={backendChartData}
-                      />
-                    </div>
-                  );
-                })}
+                      </div>
+                    )}
+                    <WidgetCard
+                      item={item}
+                      index={index}
+                      isEditMode={isEditMode}
+                      isSelected={selectedIdx === index}
+                      isOnline={isOnline}
+                      logs={logs}
+                      latestPayload={latestPayload}
+                      onSelect={setSelectedIdx}
+                    />
+                  </div>
+                ))}
               </GridLayout>
             )}
           </div>
