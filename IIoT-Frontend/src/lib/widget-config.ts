@@ -182,28 +182,35 @@ export function resolveThresholdColor(
 
 const BUCKET_MS: Record<string, number> = {
   "1h":  1  * 60 * 1000,
-  "6h":  5  * 60 * 1000,
-  "24h": 15 * 60 * 1000,
-  "7d":  60 * 60 * 1000,
-  "30d": 6  * 60 * 60 * 1000,
+  "6h":  60  * 60 * 1000,
+  "24h": 60 * 60 * 1000,
+  "7d":  24 * 60 * 60 * 1000,
+  "30d": 24 * 60 * 60 * 1000,
 };
 
 function formatBucketTime(ts: number, rangeMs: number): string {
   const d = new Date(ts);
   if (rangeMs >= 7 * 24 * 60 * 60 * 1000) {
-    // 7d / 30d: "12 Jun 14:00"
-    return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" })
-      + " " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    // 7d / 30d: tampilkan tanggal "12 Jun"
+    return d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
   }
-  // 1h / 6h / 24h: "14:05"
+  if (rangeMs >= 24 * 60 * 60 * 1000) {
+    // 24h / 6h: tampilkan jam "14:00"
+    return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  }
+  // 1h: tampilkan menit "14:05"
   return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 }
 
 export function getChartData(item: WidgetItem, logs: any[]) {
   const rangeOpt = getActiveRange(item.range);
-  const cutoff   = Date.now() - rangeOpt.ms;
   const bucketMs = BUCKET_MS[item.range ?? "1h"] ?? BUCKET_MS["1h"];
   const isMulti  = item.type === "chart" && (item.keys?.length ?? 0) > 1;
+
+  const latestTs = logs.length > 0
+    ? new Date(logs[logs.length - 1].created_at).getTime()
+    : Date.now();
+  const cutoff = latestTs - rangeOpt.ms;
 
   const filtered = logs.filter(
     (l) => l.created_at && new Date(l.created_at).getTime() >= cutoff
