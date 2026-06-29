@@ -13,17 +13,14 @@ import {
   applyTransform, applyDivisor, ThresholdItem,
 } from "@/lib/widget-config";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
+// --- Constants & Types ---
 export const MULTI_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
-
 const DIVISOR_OPTIONS = [
   { value: 1,    label: "÷1"    },
   { value: 10,   label: "÷10"   },
   { value: 100,  label: "÷100"  },
   { value: 1000, label: "÷1000" },
 ];
-
 const SWATCH = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#06b6d4","#f97316","#84cc16","#ffffff","#94a3b8","#1e293b"];
 
 export type KeyRow = { key: string; color: string; divisor: number };
@@ -37,34 +34,65 @@ interface WidgetCardProps {
   logs: any[];
   latestPayload: Record<string, any>;
   onSelect: (index: number) => void;
+  serverChartData?: any[];
 }
 
 // ─── Root card ───────────────────────────────────────────────────────────────
-
 export function WidgetCard({
-  item, index, isEditMode, isSelected, isOnline, logs, latestPayload, onSelect,
+  item, index, isEditMode, isSelected, isOnline, logs, latestPayload, onSelect, serverChartData = [],
 }: WidgetCardProps) {
-  const isChart     = item.type === "chart" || item.type === "bar";
-  const color       = item.color ?? defaultColor(item.type);
-  const rawValue    = latestPayload[item.key];
+  const isChart = item.type === "chart" || item.type === "bar";
+  const color = item.color ?? defaultColor(item.type);
+  const rawValue = latestPayload[item.key];
   const activeColor = resolveThresholdColor(rawValue, item.thresholds, color, item.divisor);
 
   const chartData = useMemo(() => {
-  if (!isChart) return [];
-  const data = getChartData(item, logs);
-  console.log("CHART DEBUG:", {
-    label: item.label,
-    key: item.key,
-    keys: item.keys,
-    range: item.range,
-    logsCount: logs.length,
-    sampleLog: logs[logs.length - 1],
-    chartDataCount: data.length,
-    chartDataSample: data[0],
-  });
-  return data;
-}, [item, logs, isChart]);
-  
+    if (!isChart) return [];
+
+    if (serverChartData && serverChartData.length > 0) {
+      const isMulti = item.type === "chart" && (item.keys?.length ?? 0) > 1;
+      const divisors = item.keyDivisors ?? [];
+
+      return serverChartData.map((d) => {
+        const dateObj = new Date(d.time);
+        let formattedTime = "";
+
+        if (item.range === "7d" || item.range === "30d") {
+          formattedTime = dateObj.toLocaleDateString("id-ID", {
+            day: "2-digit",
+            month: "short",
+            timeZone: "Asia/Jakarta"
+          });
+        } else {
+          formattedTime = dateObj.toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Asia/Jakarta"
+          });
+        }
+
+        if (isMulti && item.keys) {
+          const updatedPoint: Record<string, any> = { time: formattedTime };
+          item.keys.forEach((k, idx) => {
+            const div = divisors[idx] ?? item.divisor ?? 1;
+            const val = d[k];
+            updatedPoint[k] = val !== null && val !== undefined ? Number(val) / (div || 1) : null;
+          });
+          return updatedPoint;
+        }
+
+        const div = item.divisor ?? 1;
+        const val = d[item.key];
+        return {
+          time: formattedTime,
+          val: val !== null && val !== undefined ? Number(val) / (div || 1) : null,
+        };
+      });
+    }
+
+    return getChartData(item, logs);
+  }, [item, logs, isChart, serverChartData]);
+
   const sparkData = useMemo(() => item.type === "trend" ? getSparklineData(item, logs) : [], [item, logs]);
 
   return (
@@ -100,12 +128,10 @@ export function WidgetCard({
 }
 
 // ─── DISPLAY ─────────────────────────────────────────────────────────────────
-
 function WidgetDisplay({ item, isOnline, color, rawValue, chartData, sparkData, activeRangeLabel }: {
   item: WidgetItem; isOnline: boolean; color: string; rawValue: any;
   chartData: any[]; sparkData: { val: number }[]; activeRangeLabel: string;
 }) {
-  const isChart = item.type === "chart" || item.type === "bar";
   return (
     <div className="h-full flex flex-col p-4">
       <div className="flex items-center justify-between mb-2 shrink-0">
@@ -116,7 +142,7 @@ function WidgetDisplay({ item, isOnline, color, rawValue, chartData, sparkData, 
             {item.label || "SENSOR"}
           </span>
         </div>
-        {isChart && (
+        {(item.type === "chart" || item.type === "bar") && (
           <span className="text-[8px] font-black uppercase text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-900/40 px-1.5 py-0.5 rounded-md shrink-0 ml-2">
             {activeRangeLabel}
           </span>
@@ -126,7 +152,7 @@ function WidgetDisplay({ item, isOnline, color, rawValue, chartData, sparkData, 
         {item.type === "value"  && <ValueDisplay  rawValue={rawValue} unit={item.unit} color={color} isOnline={isOnline} divisor={item.divisor} />}
         {item.type === "trend"  && <TrendDisplay  rawValue={rawValue} unit={item.unit} color={color} isOnline={isOnline} sparkData={sparkData} divisor={item.divisor} />}
         {item.type === "gauge"  && <GaugeDisplay  rawValue={rawValue} unit={item.unit} color={color} min={item.min ?? 0} max={item.max ?? 100} divisor={item.divisor} />}
-        {item.type === "status" && <StatusDisplay rawValue={rawValue} color={color} offColor={item.offColor} isOnline={isOnline} />}
+        {item.type === "status" && <StatusDisplay rawValue={rawValue} color={color} offColor={item.offColor} isOnline={isOnline} onValue={item.onValue} />}
         {item.type === "chart"  && <AreaDisplay   data={chartData} color={color} item={item} />}
         {item.type === "bar"    && <BarDisplay    data={chartData} color={color} item={item} />}
       </div>
@@ -135,7 +161,6 @@ function WidgetDisplay({ item, isOnline, color, rawValue, chartData, sparkData, 
 }
 
 // ─── VALUE ───────────────────────────────────────────────────────────────────
-
 function ValueDisplay({ rawValue, unit, color, isOnline, divisor }: {
   rawValue: any; unit?: string; color: string; isOnline: boolean; divisor?: number;
 }) {
@@ -154,7 +179,6 @@ function ValueDisplay({ rawValue, unit, color, isOnline, divisor }: {
 }
 
 // ─── TREND ───────────────────────────────────────────────────────────────────
-
 function TrendDisplay({ rawValue, unit, color, isOnline, sparkData, divisor }: {
   rawValue: any; unit?: string; color: string; isOnline: boolean;
   sparkData: { val: number }[]; divisor?: number;
@@ -194,7 +218,6 @@ function TrendDisplay({ rawValue, unit, color, isOnline, sparkData, divisor }: {
 }
 
 // ─── GAUGE ───────────────────────────────────────────────────────────────────
-
 function GaugeDisplay({ rawValue, unit, color, min, max, divisor }: {
   rawValue: any; unit?: string; color: string; min: number; max: number; divisor?: number;
 }) {
@@ -234,17 +257,17 @@ function GaugeDisplay({ rawValue, unit, color, min, max, divisor }: {
 }
 
 // ─── STATUS ──────────────────────────────────────────────────────────────────
-
-function StatusDisplay({ rawValue, color, offColor, isOnline }: {
-  rawValue: any; color: string; offColor?: string; isOnline: boolean;
+function StatusDisplay({ rawValue, color, offColor, isOnline, onValue }: {
+  rawValue: any; color: string; offColor?: string; isOnline: boolean; onValue?: string;
 }) {
-  const on     = isOnline && isStatusOn(rawValue);
+  const on     = isOnline && isStatusOn(rawValue, onValue);
   const offClr = offColor ?? "#94a3b8";
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="relative w-16 h-8 rounded-full transition-all duration-300"
         style={{ backgroundColor: on ? color : offClr }}>
-        <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-all duration-300 ${on ? "left-9" : "left-1"}`} />
+        <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-all duration-300`}
+          style={{ transform: on ? "translateX(32px)" : "translateX(0px)" }} />
       </div>
       <span className="text-base font-black uppercase tracking-widest" style={{ color: on ? color : offClr }}>
         {on ? "ON" : "OFF"}
@@ -254,13 +277,12 @@ function StatusDisplay({ rawValue, color, offColor, isOnline }: {
 }
 
 // ─── AREA CHART ──────────────────────────────────────────────────────────────
-
 function AreaDisplay({ data, color, item }: { data: any[]; color: string; item: WidgetItem }) {
   const isMulti = item.type === "chart" && (item.keys?.length ?? 0) > 1;
   const keys    = isMulti ? item.keys! : [item.key];
   const indexed = React.useMemo(() => data.map((d, i) => ({ ...d, _idx: i })), [data]);
   const getColor = (i: number) => isMulti ? (item.colors?.[i] ?? MULTI_COLORS[i % MULTI_COLORS.length]) : color;
-
+  
   return (
     <div className="w-full h-full" style={{ minHeight: 100 }}>
       <ResponsiveContainer width="100%" height="100%">
@@ -297,7 +319,6 @@ function AreaDisplay({ data, color, item }: { data: any[]; color: string; item: 
 }
 
 // ─── BAR CHART ───────────────────────────────────────────────────────────────
-
 function BarDisplay({ data, color, item }: { data: any[]; color: string; item: WidgetItem }) {
   const indexed = React.useMemo(() => data.map((d, i) => ({ ...d, _idx: i })), [data]);
   return (
@@ -328,7 +349,6 @@ function BarDisplay({ data, color, item }: { data: any[]; color: string; item: W
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── WIDGET SETTINGS PANEL ───────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-
 interface WidgetSettingsPanelProps {
   item: WidgetItem;
   index: number;
@@ -344,7 +364,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
   const isValue  = item.type === "value";
   const isStatus = item.type === "status";
 
-  // ── Baris dinamis area chart ──────────────────────────────────────────────
   const initRows = (): KeyRow[] => {
     const keys = item.keys?.length ? item.keys : (item.key ? [item.key] : [""]);
     return keys.map((k, i) => ({
@@ -374,8 +393,8 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
 
   const isMultiKey  = item.type === "chart" && rows.length > 1;
   const hasEmptyKey = rows.some((r) => !r.key.trim());
-
   const thresholds: ThresholdItem[] = item.thresholds ?? [];
+
   const addThreshold    = () => onUpdate(index, "thresholds", [...thresholds, { value: 0, color: "#ef4444", label: "" }]);
   const removeThreshold = (i: number) => onUpdate(index, "thresholds", thresholds.filter((_, idx) => idx !== i));
   const updateThreshold = (i: number, field: keyof ThresholdItem, val: any) =>
@@ -432,7 +451,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 shrink-0">
         <div>
           <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">Panel Settings</p>
@@ -446,10 +464,7 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
         </button>
       </div>
 
-      {/* Body */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3.5">
-
-        {/* Tipe */}
         <div>
           <label className={lbl}>Tipe Tampilan</label>
           <div className="grid grid-cols-3 gap-1.5 mt-1.5">
@@ -468,14 +483,12 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </div>
         </div>
 
-        {/* Label */}
         <div>
           <label className={lbl}>Label</label>
           <input className={inp} placeholder="Suhu Ruangan" value={item.label}
             onChange={(e) => onUpdate(index, "label", e.target.value)} />
         </div>
 
-        {/* MQTT Key (non-chart) */}
         {!isChart && (
           <div>
             <label className={lbl}>MQTT Key</label>
@@ -484,7 +497,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </div>
         )}
 
-        {/* Satuan (non-status) */}
         {!isStatus && (
           <div>
             <label className={lbl}>Satuan</label>
@@ -493,7 +505,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </div>
         )}
 
-        {/* Divisor (value, gauge, trend, bar) */}
         {(isValue || isGauge || isTrend || item.type === "bar") && (
           <>
             <div className={sec}>Transformasi Nilai</div>
@@ -501,7 +512,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </>
         )}
 
-        {/* Warna aksen (non-status, non-multi-chart) */}
         {!isStatus && (!isChart || item.type === "bar" || !isMultiKey) && (
           <div>
             <label className={lbl}>Warna Aksen</label>
@@ -509,7 +519,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </div>
         )}
 
-        {/* Status: warna ON + OFF */}
         {isStatus && (
           <div className="space-y-3">
             <div>
@@ -523,7 +532,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </div>
         )}
 
-        {/* Gauge min/max + warna */}
         {isGauge && (
           <>
             <div className="grid grid-cols-2 gap-2">
@@ -545,7 +553,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </>
         )}
 
-        {/* Bar: MQTT Key */}
         {item.type === "bar" && (
           <div>
             <label className={lbl}>MQTT Key</label>
@@ -554,7 +561,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </div>
         )}
 
-        {/* Area: baris dinamis */}
         {item.type === "chart" && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -605,7 +611,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </div>
         )}
 
-        {/* Range */}
         {isChart && (
           <div>
             <label className={lbl}>Rentang Waktu</label>
@@ -624,7 +629,6 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
           </div>
         )}
 
-        {/* Thresholds (gauge, value, trend) */}
         {(isGauge || isValue || isTrend) && (
           <div className="space-y-2">
             <div className={sec}>Thresholds</div>
@@ -658,10 +662,8 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
             </button>
           </div>
         )}
-
       </div>
 
-      {/* Footer */}
       <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 shrink-0">
         <button onClick={() => { onRemove(index); onClose(); }}
           className="w-full py-2 rounded-xl text-[9px] font-black uppercase tracking-widest text-rose-500 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer bg-transparent">

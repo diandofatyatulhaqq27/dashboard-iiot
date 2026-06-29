@@ -172,10 +172,10 @@ export function resolveThresholdColor(
 //
 // Bucket size per range (standar Grafana/InfluxDB):
 //   1h  → per 1 menit  → max ~60 titik
-//   6h  → per 5 menit  → max ~72 titik
-//   24h → per 15 menit → max ~96 titik
-//   7d  → per 1 jam    → max ~168 titik
-//   30d → per 6 jam    → max ~120 titik
+//   6h  → per 1 jam  → max ~6 titik
+//   24h → per 1 jam  → max ~24 titik
+//   7d  → per 1 hari    → max ~7 titik
+//   30d → per 30 hari    → max ~30 titik
 //
 // Setiap bucket = rata-rata semua data dalam window tersebut.
 // Bucket aktif (terakhir/belum penuh) update real-time otomatis.
@@ -207,11 +207,7 @@ function formatBucketTime(ts: number, rangeMs: number): string {
     });
   }
   // 1h: tampilkan menit "14:05"
-  return d.toLocaleTimeString("id-ID", { 
-    hour: "2-digit", 
-    minute: "2-digit",
-    timeZone: "Asia/Jakarta"
-  });
+  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
 }
 
 export function getChartData(item: WidgetItem, logs: any[]) {
