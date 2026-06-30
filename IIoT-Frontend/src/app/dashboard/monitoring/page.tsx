@@ -51,9 +51,17 @@ function buildChartData(alarms: any[], period: Period) {
   }
 
   if (period === "daily") {
+    // Align the rolling 30-day window to the start of today (local midnight)
+    // instead of the current timestamp, so the last bucket always represents
+    // "today" with the correct calendar date label — fixes off-by-one bug
+    // where today's date appeared shifted back by 1 day depending on the
+    // current time-of-day.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
     return Array.from({ length: 30 }, (_, i) => {
       const slotStart =
-        now - (29 - i) * 86_400_000;
+        startOfToday.getTime() - (29 - i) * 86_400_000;
 
       const slotEnd = slotStart + 86_400_000;
 
