@@ -500,7 +500,7 @@ export function WidgetSettingsPanel({ item, index, onUpdate, onRemove, onClose }
         )}
 
         {/* Warna aksen (non-status, non-gauge single) */}
-        {!isStatus && (!isChart || item.type === "bar" || !isMultiKey) && (
+        {!isStatus && !isGauge && item.type !== "chart" && (!isChart || item.type === "bar" || !isMultiKey) && (
           <div>
             <label className={lbl}>Warna Aksen</label>
             <ColorSwatch field="color" value={item.color} />
