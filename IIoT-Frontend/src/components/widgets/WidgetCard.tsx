@@ -254,8 +254,6 @@ function StatusDisplay({ rawValue, color, offColor, isOnline }: {
   );
 }
 
-// ─── AREA CHART ──────────────────────────────────────────────────────────────
-
 function AreaDisplay({ data, color, item }: { data: any[]; color: string; item: WidgetItem }) {
   const isMulti = item.type === "chart" && (item.keys?.length ?? 0) > 1;
   const keys    = isMulti ? item.keys! : [item.key];
@@ -275,7 +273,7 @@ function AreaDisplay({ data, color, item }: { data: any[]; color: string; item: 
             ))}
           </defs>
           <XAxis dataKey="_idx" tick={{ fontSize: 8, fill: "#94a3b8" }} tickLine={false} axisLine={false}
-            tickFormatter={(idx) => indexed[idx]?.time ?? ""} interval="preserveStartEnd" />
+            tickFormatter={(idx) => formatTickTime(indexed[idx]?.time)} interval="preserveStartEnd" />
           <YAxis tick={{ fontSize: 8, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
           <Tooltip
             allowEscapeViewBox={{ x: false, y: false }}
@@ -284,7 +282,7 @@ function AreaDisplay({ data, color, item }: { data: any[]; color: string; item: 
               typeof value === "number" ? String(parseFloat(value.toPrecision(10))) : value,
               isMulti ? name : item.key,
             ]}
-            labelFormatter={(idx) => indexed[Number(idx)]?.time ?? ""}
+            labelFormatter={(idx) => formatTickTime(indexed[Number(idx)]?.time)}
             labelStyle={{ color: "#94a3b8", marginBottom: 4 }}
           />
           {keys.map((k, i) => (
@@ -306,7 +304,7 @@ function BarDisplay({ data, color, item }: { data: any[]; color: string; item: W
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={indexed} margin={{ top: 4, right: 4, left: -24, bottom: 0 }} barCategoryGap="25%">
           <XAxis dataKey="_idx" tick={{ fontSize: 8, fill: "#94a3b8" }} tickLine={false} axisLine={false}
-            tickFormatter={(idx) => indexed[idx]?.time ?? ""} interval="preserveStartEnd" />
+            tickFormatter={(idx) => formatTickTime(indexed[idx]?.time)} interval="preserveStartEnd" />
           <YAxis tick={{ fontSize: 8, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
           <Tooltip
             allowEscapeViewBox={{ x: false, y: false }}
@@ -315,7 +313,7 @@ function BarDisplay({ data, color, item }: { data: any[]; color: string; item: W
               typeof value === "number" ? String(parseFloat(value.toPrecision(10))) : value,
               item.key || "val",
             ]}
-            labelFormatter={(idx) => indexed[Number(idx)]?.time ?? ""}
+            labelFormatter={(idx) => formatTickTime(indexed[Number(idx)]?.time)}
             labelStyle={{ color: "#94a3b8", marginBottom: 2 }}
             cursor={{ fill: `${color}15` }}
           />
