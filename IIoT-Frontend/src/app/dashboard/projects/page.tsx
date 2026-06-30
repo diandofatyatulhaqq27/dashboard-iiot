@@ -268,7 +268,7 @@ export default function ProjectsPage() {
                 <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest w-16">No.</th>
                 <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Project Name</th>
                 <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Company / Tenant</th>
-                <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Description / GIS</th>
+                <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Description</th>
                 <th className="p-4 text-center text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Control Action</th>
               </tr>
             </thead>
@@ -444,7 +444,7 @@ export default function ProjectsPage() {
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Installation Description</label>
+                <label className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Description</label>
                 <textarea
                   className="w-full p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl text-[11px] font-bold border-none ring-1 ring-slate-100 dark:ring-slate-700/50 text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-600 outline-none transition-all resize-none"
                   rows={3}
