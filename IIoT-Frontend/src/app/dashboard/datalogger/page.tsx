@@ -74,9 +74,6 @@ export default function DataLoggerPage() {
   }, [selectedProject]);
 
   // ─── 2. FETCH HISTORICAL LOGS — server-side pagination + filter tanggal ──
-  // Pakai endpoint /gateways/{id}/logs yang sudah filter & paginate di SQL,
-  // jadi browser cuma download 25 baris per halaman, bukan ribuan sekaligus.
-  // Kalau "SEMUA GATEWAY" dipilih → fetch tiap gateway lalu gabung + sort.
   const fetchHistoricalData = useCallback(async (page: number = 1) => {
     if (!selectedProject) return;
 
@@ -99,7 +96,6 @@ export default function DataLoggerPage() {
       if (endDate.trim())   params.set("end_date", endDate);
 
       if (selectedGateway) {
-        // Satu gateway spesifik → 1 request, pagination native dari backend
         const res = await fetch(`${API_BASE}/gateways/${selectedGateway}/logs?${params}`, {
           method: "GET", cache: "no-store", headers: getAuthHeaders(),
         });
@@ -108,11 +104,6 @@ export default function DataLoggerPage() {
         setLogs(json.data?.logs ?? []);
         setPagination(json.data?.pagination ?? { page: 1, page_size: 25, total_records: 0, total_pages: 0 });
       } else {
-        // Semua gateway dalam project → fetch tiap gateway, gabung, sort.
-        // Catatan: untuk dataset sangat besar lintas banyak gateway,
-        // idealnya backend punya endpoint project-level dengan pagination
-        // native juga. Untuk sekarang ini cukup ringan karena tiap gateway
-        // query sudah ter-filter tanggal + dibatasi page_size besar wajar.
         const results = await Promise.all(
           gatewaysToQuery.map((gwId) =>
             fetch(`${API_BASE}/gateways/${gwId}/logs?${params}`, {
@@ -153,7 +144,7 @@ export default function DataLoggerPage() {
   const gatewayName = (gatewayId: any) =>
     gatewaysList.find((g) => g.gateway_id === gatewayId)?.name ?? `Gateway #${gatewayId ?? "—"}`;
 
-  // ─── 3. EXPORT CSV (hanya export data halaman yang sedang ditampilkan) ──
+  // ─── 3. EXPORT CSV ───────────────────────────────────────────────────────
   const handleExportCSV = () => {
     if (logs.length === 0) return alert("Tidak ada data untuk di-export!");
     const projectName = projectsList.find((p) => String(p.project_id) === String(selectedProject))?.display_name ?? selectedProject;
@@ -347,27 +338,63 @@ export default function DataLoggerPage() {
           </table>
         </div>
 
-        {/* ── PAGINATION (server-side) ── */}
+        {/* ── PAGINATION (server-side) dengan Jump to Page ── */}
         {pagination.total_pages > 1 && (
-          <div className="p-4 border-t border-slate-50 dark:border-slate-700 flex items-center justify-between font-sans">
+          <div className="p-4 border-t border-slate-50 dark:border-slate-700 flex items-center justify-between font-sans flex-wrap gap-3">
             <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
               Page {pagination.page} of {pagination.total_pages} — {pagination.total_records} total records
             </p>
-            <div className="flex gap-1.5">
-              <button
-                onClick={() => handlePageChange(Math.max(pagination.page - 1, 1))}
-                disabled={pagination.page === 1}
-                className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 cursor-pointer disabled:opacity-40"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => handlePageChange(Math.min(pagination.page + 1, pagination.total_pages))}
-                disabled={pagination.page === pagination.total_pages}
-                className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 cursor-pointer disabled:opacity-40"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Go to</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={pagination.total_pages}
+                  defaultValue={pagination.page}
+                  key={pagination.page}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = Number((e.target as HTMLInputElement).value);
+                      if (val >= 1 && val <= pagination.total_pages) {
+                        handlePageChange(val);
+                      } else {
+                        (e.target as HTMLInputElement).value = String(pagination.page);
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const val = Number(e.target.value);
+                    if (val >= 1 && val <= pagination.total_pages && val !== pagination.page) {
+                      handlePageChange(val);
+                    } else {
+                      e.target.value = String(pagination.page);
+                    }
+                  }}
+                  className="w-16 py-1.5 px-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-[11px] font-bold text-center outline-none border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:ring-2 ring-blue-200 dark:ring-blue-800"
+                />
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                  / {pagination.total_pages}
+                </span>
+              </div>
+
+              <div className="flex gap-1.5 ml-2">
+                <button
+                  onClick={() => handlePageChange(Math.max(pagination.page - 1, 1))}
+                  disabled={pagination.page === 1}
+                  className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 cursor-pointer disabled:opacity-40"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handlePageChange(Math.min(pagination.page + 1, pagination.total_pages))}
+                  disabled={pagination.page === pagination.total_pages}
+                  className="p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 cursor-pointer disabled:opacity-40"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         )}
