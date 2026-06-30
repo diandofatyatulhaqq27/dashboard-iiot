@@ -277,16 +277,19 @@ export default function AlarmsPage() {
 
                       <td className="p-4 text-center font-black uppercase tracking-widest text-[9px]">
                         {alarmState === "active" ? (
-                          <span className="px-2 py-1 rounded-md border inline-block whitespace-nowrap bg-rose-500 text-white border-rose-600 animate-pulse shadow-[0_0_8px_#ef4444]">
-                            ● active
+                          <span className="px-2 py-1 rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap bg-rose-500 text-white border-rose-600 animate-pulse shadow-[0_0_8px_#ef4444]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
+                            active
                           </span>
                         ) : alarmState === "online" ? (
-                          <span className="px-2 py-1 rounded-md border inline-block whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40">
-                            ● online
+                          <span className="px-2 py-1 rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            online
                           </span>
                         ) : (
-                          <span className="px-2 py-1 rounded-md border inline-block whitespace-nowrap bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800">
-                            ● offline
+                          <span className="px-2 py-1 rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                            offline
                           </span>
                         )}
                       </td>
