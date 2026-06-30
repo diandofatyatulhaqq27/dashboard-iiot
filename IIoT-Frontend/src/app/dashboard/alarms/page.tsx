@@ -10,6 +10,17 @@ const DEFAULT_FORM = {
   message: "",
 };
 
+// Helper: classify alarm status into 3 states based on raw MQTT value
+// - "1" / "ACTIVE"  -> alarm is actively triggered (danger)
+// - "0" / "NORMAL"  -> gateway is sending data, value is normal (online)
+// - anything else (null/undefined/no recent data) -> truly offline, no data received
+function getAlarmState(alarm: any): "active" | "online" | "offline" {
+  const status = alarm.status;
+  if (status === "ACTIVE" || status === "1" || status === 1) return "active";
+  if (status === "0" || status === 0 || status === "NORMAL" || status === "RESOLVED") return "online";
+  return "offline";
+}
+
 export default function AlarmsPage() {
   const [alarms, setAlarms] = useState<any[]>([]);
   const [gatewaysList, setGatewaysList] = useState<any[]>([]);
@@ -234,7 +245,8 @@ export default function AlarmsPage() {
                 <tr><td colSpan={columnCount} className="p-16 text-center text-rose-500 dark:text-rose-400 font-bold text-[11px]"><AlertTriangle className="w-4 h-4 mx-auto mb-2" /> {error}</td></tr>
               ) : filteredAlarms.length > 0 ? (
                 filteredAlarms.map((alarm: any, index: number) => {
-                  const isActive = alarm.status === "ACTIVE" || alarm.status === "1";
+                  const alarmState = getAlarmState(alarm);
+                  const isActive = alarmState === "active";
 
                   return (
                     <tr key={alarm.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors text-[11px]">
@@ -264,13 +276,19 @@ export default function AlarmsPage() {
                       </td>
 
                       <td className="p-4 text-center">
-                        <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-md border inline-block whitespace-nowrap ${
-                          isActive
-                            ? "bg-rose-500 text-white border-rose-600 animate-pulse shadow-[0_0_8px_#ef4444]"
-                            : "bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800"
-                        }`}>
-                          {isActive ? "ACTIVE (1)" : "OFF (0)"}
-                        </span>
+                        {alarmState === "active" ? (
+                          <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-md border inline-block whitespace-nowrap bg-rose-500 text-white border-rose-600 animate-pulse shadow-[0_0_8px_#ef4444]">
+                            ACTIVE (1)
+                          </span>
+                        ) : alarmState === "online" ? (
+                          <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-md border inline-block whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50">
+                            ONLINE (0)
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-md border inline-block whitespace-nowrap bg-slate-100 dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800">
+                            OFFLINE
+                          </span>
+                        )}
                       </td>
                       <td className="p-4">
                         <div className="flex justify-center gap-1.5 items-center">
