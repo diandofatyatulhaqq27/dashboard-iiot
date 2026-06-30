@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { Edit2, X, Loader2, Trash2, RefreshCcw, AlertTriangle, Plus, Search, BellRing, ShieldAlert, Tag, CheckCircle2, Cpu } from "lucide-react";
+import { Edit2, X, Loader2, Trash2, RefreshCcw, AlertTriangle, Plus, Search, BellRing, ShieldAlert, Tag, CheckCircle2, Network } from "lucide-react";
 import { API_BASE, getAuthHeaders, getUserRole, isReadOnlyRole } from "@/lib/api";
 
 const DEFAULT_FORM = {
@@ -21,7 +21,9 @@ export default function AlarmsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newAlarmForm, setNewAlarmForm] = useState({ ...DEFAULT_FORM });
 
-  const isReadOnly = isReadOnlyRole(getUserRole());
+  const userRole = getUserRole();
+  const isReadOnly = isReadOnlyRole(userRole);
+  const canViewMqttKey = userRole === "admin" || userRole === "rasindo_operator";
 
   const fetchAlarms = useCallback(async () => {
     try {
@@ -175,6 +177,8 @@ export default function AlarmsPage() {
     );
   });
 
+  const columnCount = canViewMqttKey ? 8 : 7;
+
   return (
     <div className="p-6 bg-transparent min-h-screen font-sans text-slate-900 dark:text-slate-100">
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden transition-all duration-300">
@@ -214,7 +218,9 @@ export default function AlarmsPage() {
                 <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest w-14">No.</th>
                 <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Alarm Name</th>
                 <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Bound Gateway</th>
-                <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">MQTT Key Bind</th>
+                {canViewMqttKey && (
+                  <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">MQTT Key Bind</th>
+                )}
                 <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Description / Event</th>
                 <th className="p-4 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Incident Time</th>
                 <th className="p-4 text-center text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest w-28">Status</th>
@@ -223,9 +229,9 @@ export default function AlarmsPage() {
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-slate-700/40">
               {loading ? (
-                <tr><td colSpan={8} className="p-20 text-center"><Loader2 className="w-7 h-7 animate-spin text-blue-600 dark:text-blue-400 mx-auto" /></td></tr>
+                <tr><td colSpan={columnCount} className="p-20 text-center"><Loader2 className="w-7 h-7 animate-spin text-blue-600 dark:text-blue-400 mx-auto" /></td></tr>
               ) : error ? (
-                <tr><td colSpan={8} className="p-16 text-center text-rose-500 dark:text-rose-400 font-bold text-[11px]"><AlertTriangle className="w-4 h-4 mx-auto mb-2" /> {error}</td></tr>
+                <tr><td colSpan={columnCount} className="p-16 text-center text-rose-500 dark:text-rose-400 font-bold text-[11px]"><AlertTriangle className="w-4 h-4 mx-auto mb-2" /> {error}</td></tr>
               ) : filteredAlarms.length > 0 ? (
                 filteredAlarms.map((alarm: any, index: number) => {
                   const isActive = alarm.status === "ACTIVE" || alarm.status === "1";
@@ -237,15 +243,17 @@ export default function AlarmsPage() {
                         {alarm.name || <span className="text-slate-300 dark:text-slate-600 italic font-normal normal-case">— Belum diberi nama —</span>}
                       </td>
                       <td className="p-4">
-                        <span className="text-[9px] font-black uppercase text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-2 py-1 rounded-lg border border-blue-100 dark:border-blue-900/50 flex items-center gap-1 w-fit">
-                          <Cpu className="w-2.5 h-2.5" /> {getGatewayName(alarm.gateway_id)}
+                        <span className="text-[9px] font-black uppercase text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 px-2 py-1 rounded-lg border border-teal-100 dark:border-teal-900/50 flex items-center gap-1 w-fit">
+                          <Network className="w-2.5 h-2.5" /> {getGatewayName(alarm.gateway_id)}
                         </span>
                       </td>
-                      <td className="p-4">
-                        <span className="font-mono text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 px-2 py-1 rounded-md font-bold flex items-center gap-1 w-fit">
-                          <Tag className="w-2.5 h-2.5" /> {alarm.mqtt_key || "UNMAPPED"}
-                        </span>
-                      </td>
+                      {canViewMqttKey && (
+                        <td className="p-4">
+                          <span className="font-mono text-[10px] bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 px-2 py-1 rounded-md font-bold flex items-center gap-1 w-fit">
+                            <Tag className="w-2.5 h-2.5" /> {alarm.mqtt_key || "UNMAPPED"}
+                          </span>
+                        </td>
+                      )}
                       <td className="p-4 font-bold text-slate-600 dark:text-slate-300">{alarm.message}</td>
 
                       <td className="p-4 font-mono font-bold text-slate-400 dark:text-slate-500">
@@ -288,7 +296,7 @@ export default function AlarmsPage() {
                   );
                 })
               ) : (
-                <tr><td colSpan={8} className="p-20 text-center text-slate-400 dark:text-slate-500 text-[9px] font-black uppercase italic tracking-[0.2em]">No dangerous leakages or critical alarms triggered.</td></tr>
+                <tr><td colSpan={columnCount} className="p-20 text-center text-slate-400 dark:text-slate-500 text-[9px] font-black uppercase italic tracking-[0.2em]">No dangerous leakages or critical alarms triggered.</td></tr>
               )}
             </tbody>
           </table>
@@ -312,7 +320,7 @@ export default function AlarmsPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-                  <Cpu className="w-2.5 h-2.5 text-blue-500" /> Bind to Gateway
+                  <Network className="w-2.5 h-2.5 text-teal-500" /> Bind to Gateway
                 </label>
                 <select className="w-full p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl text-[11px] font-black border-none ring-1 ring-slate-100 dark:ring-slate-700/50 outline-none text-slate-800 dark:text-slate-100 cursor-pointer focus:ring-2 focus:ring-blue-600" value={newAlarmForm.gateway_id} onChange={(e) => setNewAlarmForm({ ...newAlarmForm, gateway_id: e.target.value })} required>
                   {gatewaysList.length === 0 && <option value="" disabled>Loading gateways...</option>}
@@ -353,7 +361,7 @@ export default function AlarmsPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1 flex items-center gap-1">
-                  <Cpu className="w-2.5 h-2.5 text-blue-500" /> Bind to Gateway
+                  <Network className="w-2.5 h-2.5 text-teal-500" /> Bind to Gateway
                 </label>
                 <select className="w-full p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl text-[11px] font-black border-none ring-1 ring-slate-100 dark:ring-slate-700/50 outline-none text-slate-800 dark:text-slate-100 cursor-pointer focus:ring-2 focus:ring-amber-500" value={editingAlarm.gateway_id ?? ""} onChange={(e) => setEditingAlarm({ ...editingAlarm, gateway_id: parseInt(e.target.value, 10) })} required>
                   {gatewaysList.map((g) => <option key={g.gateway_id} value={g.gateway_id}>{g.name.toUpperCase()} (#ID: {g.gateway_id})</option>)}
