@@ -283,7 +283,7 @@ export default function AlarmsPage() {
                           </span>
                         ) : alarmState === "online" ? (
                           <span className="px-2 py-1 rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap leading-none bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 -mt-px" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 translate-y-[0.5px]" />
                             <span className="leading-none">online</span>
                           </span>
                         ) : (
