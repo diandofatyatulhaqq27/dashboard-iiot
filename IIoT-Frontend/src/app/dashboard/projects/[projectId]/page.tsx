@@ -16,7 +16,7 @@ export default function ProjectRedirectPage() {
     // ── Layer 1: request itself failed (network/API error, invalid project id, etc.) ──
     if (isError) {
       console.error("Redirect error: gagal memuat project.");
-      router.replace(`/dashboard/error404?reason=load-failed`);
+      router.replace(`/error404?reason=load-failed`);
       return;
     }
 
@@ -24,7 +24,7 @@ export default function ProjectRedirectPage() {
 
     // ── Layer 2: request succeeded, but this project has no gateway bound ──
     if (gatewayList.length === 0) {
-      router.replace(`/dashboard/error404?reason=no-gateway&projectId=${projectId}`);
+      router.replace(`/error404?reason=no-gateway&projectId=${projectId}`);
       return;
     }
 
