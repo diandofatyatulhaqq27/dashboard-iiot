@@ -19,7 +19,7 @@ import { useAlarmHistory } from "@/hooks/useAlarmHistory";
 
 const POLL_INTERVAL = 5000;
 
-function timeAgo(dateStr?: string | Date | null): string {
+function timeAgo(dateStr?: string | Date | number | null): string {
   if (!dateStr) return "Never";
   const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
   if (diffSec < 5) return "Just now";
