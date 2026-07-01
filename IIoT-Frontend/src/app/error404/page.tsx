@@ -93,12 +93,12 @@ export default function Error404Page() {
           {reason.title === DEFAULT_REASON.title ? "Error" : reason.title}
         </h1>
 
-        <div className="mt-8 flex items-center justify-center gap-3 sm:gap-5">
-          <span className="text-8xl sm:text-9xl font-black text-blue-500 leading-none select-none">4</span>
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-2 border-blue-500 bg-blue-500/10 flex items-center justify-center">
+        <div className="mt-8 flex items-center justify-center gap-3 sm:gap-6">
+          <span className="text-[9rem] sm:text-[13rem] font-black text-blue-500 leading-none select-none">4</span>
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-2 border-blue-500 bg-blue-500/10 flex items-center justify-center shrink-0">
             <Frown className="w-11 h-11 sm:w-12 sm:h-12 text-blue-400" strokeWidth={2.5} />
           </div>
-          <span className="text-8xl sm:text-9xl font-black text-blue-500 leading-none select-none">4</span>
+          <span className="text-[9rem] sm:text-[13rem] font-black text-blue-500 leading-none select-none">4</span>
         </div>
 
         <p className="mt-8 max-w-md text-sm sm:text-base font-medium text-slate-400">
