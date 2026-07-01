@@ -1,10 +1,13 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, Edit2, X, Loader2, Trash2, RefreshCcw, Building2, MapPin, AlertTriangle, Plus, Search, Check, ChevronDown, ChevronUp } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
 import { AssetMap } from "@/components/maps/AssetMap";
-import { API_BASE, getAuthHeaders, getLocalUser, isReadOnlyRole } from "@/lib/api";
+import { getLocalUser, isReadOnlyRole } from "@/lib/api";
+
+import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
+import { useCompanies } from "@/hooks/useCompanies";
 
 const DEFAULT_NEW_FORM = {
   display_name: "",
@@ -77,10 +80,26 @@ function CompanySelect({
 export default function ProjectsPage() {
   const router = useRouter();
 
-  const [projects, setProjects] = useState<any[]>([]);
-  const [companiesList, setCompaniesList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const projectsQuery = useProjects();
+  const companiesQuery = useCompanies();
+
+  const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
+
+  const companiesList = companiesQuery.data ?? [];
+
+  // Same sort AssetMap/ProjectsPage previously did after fetch — keep it
+  // client-side via useMemo so it re-derives whenever the query data changes.
+  const projects = useMemo(() => {
+    const raw = projectsQuery.data ?? [];
+    return [...raw].sort((a, b) =>
+      (a.display_name ?? "").localeCompare(b.display_name ?? "")
+    );
+  }, [projectsQuery.data]);
+
+  const loading = projectsQuery.isLoading;
+  const error = projectsQuery.error?.message ?? null;
 
   const [editingProject, setEditingProject] = useState<any>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -90,72 +109,17 @@ export default function ProjectsPage() {
 
   const isReadOnly = isReadOnlyRole(getLocalUser()?.role);
 
-  const fetchProjects = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const currentUser = getLocalUser();
-      const currentRole: string = currentUser?.role ?? "client_user";
-      const currentCompanyId: string = String(currentUser?.company_id ?? "");
-
-      let url = `${API_BASE}/projects/`;
-      if (currentRole !== "admin" && currentCompanyId) {
-        url += `?company_id=${currentCompanyId}`;
-      }
-
-      const res = await fetch(url, {
-        method: "GET",
-        cache: "no-store",
-        headers: getAuthHeaders(),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData?.detail ?? "Gagal menarik data project dari server.");
-      }
-
-      const result = await res.json();
-      const rawData = result.data ?? [];
-
-      const sortedData = [...rawData].sort((a, b) =>
-        (a.display_name ?? "").localeCompare(b.display_name ?? "")
-      );
-
-      setProjects(sortedData);
-    } catch (err: any) {
-      console.error("fetchProjects error:", err);
-      setError(err.message ?? "Terjadi kesalahan.");
-      setProjects([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchCompaniesList = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/companies/`, { headers: getAuthHeaders() });
-      if (!res.ok) return;
-
-      const result = await res.json();
-      const compData: any[] = result.data ?? [];
-      setCompaniesList(compData);
-
-      if (compData.length > 0) {
-        setNewProjectForm((prev) => ({
-          ...prev,
-          company_id: String(compData[0].id),
-        }));
-      }
-    } catch (err) {
-      console.error("fetchCompaniesList error:", err);
-    }
-  }, []);
-
+  // Default the create-form's company_id to the first company once the
+  // companies list loads — mirrors the old fetchCompaniesList behavior.
   useEffect(() => {
-    fetchProjects();
-    fetchCompaniesList();
-  }, [fetchProjects, fetchCompaniesList]);
+    if (companiesList.length > 0 && !newProjectForm.company_id) {
+      setNewProjectForm((prev) => ({
+        ...prev,
+        company_id: String(companiesList[0].id),
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companiesList]);
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,25 +153,12 @@ export default function ProjectsPage() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/projects/`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        alert("Project berhasil didaftarkan!");
-        setIsCreateModalOpen(false);
-        setNewProjectForm({ ...DEFAULT_NEW_FORM });
-        fetchProjects();
-      } else {
-        const rawText = await res.text();
-        let errData: any = {};
-        try { errData = JSON.parse(rawText); } catch {}
-        alert(errData?.detail ?? rawText ?? "Gagal menyimpan project.");
-      }
-    } catch (err) {
-      alert("Gagal komunikasi ke server.");
+      await createProject.mutateAsync(payload);
+      alert("Project berhasil didaftarkan!");
+      setIsCreateModalOpen(false);
+      setNewProjectForm({ ...DEFAULT_NEW_FORM });
+    } catch (err: any) {
+      alert(err.message ?? "Gagal menyimpan project.");
     }
   };
 
@@ -238,22 +189,11 @@ export default function ProjectsPage() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/projects/${editingProject.project_id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (res.ok) {
-        alert("Data berhasil diperbarui!");
-        setEditingProject(null);
-        fetchProjects();
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        alert(errData?.detail ?? "Gagal memperbarui data.");
-      }
-    } catch (err) {
-      alert("Gagal komunikasi ke server.");
+      await updateProject.mutateAsync({ id: editingProject.project_id, payload });
+      alert("Data berhasil diperbarui!");
+      setEditingProject(null);
+    } catch (err: any) {
+      alert(err.message ?? "Gagal memperbarui data.");
     }
   };
 
@@ -262,19 +202,9 @@ export default function ProjectsPage() {
     if (!confirm(`Hapus project "${displayName}"?`)) return;
 
     try {
-      const res = await fetch(`${API_BASE}/projects/${projectId}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-      });
-
-      if (res.ok) {
-        fetchProjects();
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        alert(errData?.detail ?? "Gagal menghapus project.");
-      }
-    } catch (err) {
-      alert("Gagal menghapus. Periksa koneksi.");
+      await deleteProject.mutateAsync(projectId);
+    } catch (err: any) {
+      alert(err.message ?? "Gagal menghapus. Periksa koneksi.");
     }
   };
 
@@ -314,10 +244,10 @@ export default function ProjectsPage() {
           )}
 
           <button
-            onClick={fetchProjects}
+            onClick={() => projectsQuery.refetch()}
             className="p-2.5 bg-slate-50 dark:bg-slate-900/80 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border-none cursor-pointer"
           >
-            <RefreshCcw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCcw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${projectsQuery.isFetching ? "animate-spin" : ""}`} />
           </button>
         </div>
 
@@ -515,8 +445,10 @@ export default function ProjectsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 transition-all"
+                  disabled={createProject.isPending}
+                  className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                 >
+                  {createProject.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
                   Create Site
                 </button>
               </div>
@@ -613,8 +545,10 @@ export default function ProjectsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 transition-all"
+                  disabled={updateProject.isPending}
+                  className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                 >
+                  {updateProject.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
                   Update Site
                 </button>
               </div>

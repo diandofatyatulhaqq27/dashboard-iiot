@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE, getAuthHeaders, getLocalUser } from "@/lib/api";
 
 /**
@@ -32,5 +32,84 @@ export function useProjects(options?: { refetchInterval?: number }) {
     },
     staleTime: 5_000,
     refetchInterval: options?.refetchInterval,
+  });
+}
+
+export function useCreateProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      display_name: string;
+      description: string;
+      company_id: number;
+      latitude: number;
+      longitude: number;
+      config: any[];
+    }) => {
+      const res = await fetch(`${API_BASE}/projects/`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const rawText = await res.text();
+        let errData: any = {};
+        try { errData = JSON.parse(rawText); } catch {}
+        throw new Error(errData?.detail ?? rawText ?? "Gagal menyimpan project.");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      // Invalidates every ["projects", ...] cache bucket regardless of
+      // which company_id key it was stored under.
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+}
+
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: Record<string, any> }) => {
+      const res = await fetch(`${API_BASE}/projects/${id}`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.detail ?? "Gagal memperbarui data.");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${API_BASE}/projects/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.detail ?? "Gagal menghapus project.");
+      }
+
+      return res.json().catch(() => ({}));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+    },
   });
 }
