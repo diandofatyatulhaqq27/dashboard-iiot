@@ -16,7 +16,49 @@ import {
 
 const COLS  = 80;
 const ROW_H = 80;
-const GridLayout = WidthProvider(ReactGridLayout as any)as any;
+const GridLayout = WidthProvider(ReactGridLayout as any) as any;
+
+// ── Custom resize handle ──────────────────────────────────────────────────
+// react-resizable's default CSS relies on `position: absolute`, which gets
+// dropped/overridden under Tailwind v4's cascade-layer system — the handle
+// ends up in the DOM but invisible/mispositioned. Rendering our own with
+// inline styles sidesteps the cascade entirely since inline styles always
+// win regardless of layer order.
+const CustomResizeHandle = React.forwardRef<
+  HTMLSpanElement,
+  { handleAxis?: string } & React.HTMLAttributes<HTMLSpanElement>
+>(({ handleAxis, ...restProps }, ref) => (
+  <span
+    ref={ref}
+    className={`react-resizable-handle react-resizable-handle-${handleAxis}`}
+    style={{
+      position: "absolute",
+      width: 20,
+      height: 20,
+      bottom: 2,
+      right: 2,
+      cursor: "se-resize",
+      zIndex: 30,
+      display: "block",
+    }}
+    {...restProps}
+  >
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      style={{ position: "absolute", bottom: 2, right: 2, pointerEvents: "none" }}
+    >
+      <path
+        d="M10 1L1 10M10 5.5L5.5 10M10 10L10 10"
+        stroke="rgba(148,163,184,0.8)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  </span>
+));
+CustomResizeHandle.displayName = "CustomResizeHandle";
 
 type RGLLayout = {
   i: string; x: number; y: number; w: number; h: number; minW?: number; minH?: number;
@@ -34,7 +76,6 @@ export default function SingleGatewayPage() {
   const [editConfig,     setEditConfig]     = useState<WidgetItem[]>([]);
   const [selectedIdx,    setSelectedIdx]    = useState<number | null>(null);
   const [layouts,        setLayouts]        = useState<RGLLayout[]>([]);
-  const [containerWidth, setContainerWidth] = useState(1200);
 
   // ── Floating panel drag state ─────────────────────────────────────────────
   const [panelPos,        setPanelPos]        = useState({ x: 100, y: 80 });
@@ -85,15 +126,6 @@ export default function SingleGatewayPage() {
       window.removeEventListener("mouseup",   onUp);
     };
   }, [isDraggingPanel]);
-
-  // ── Grid container width ──────────────────────────────────────────────────
-  const gridRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!gridRef.current) return;
-    const obs = new ResizeObserver((entries) => setContainerWidth(entries[0].contentRect.width));
-    obs.observe(gridRef.current);
-    return () => obs.disconnect();
-  }, []);
 
   // ── Sync local editConfig from server config whenever NOT actively editing.
   useEffect(() => {
@@ -293,7 +325,7 @@ export default function SingleGatewayPage() {
         </div>
 
         {/* ── GRID ─────────────────────────────────────────────────────────── */}
-        <div ref={gridRef}>
+        <div>
           {editConfig.length === 0 ? (
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-12 text-center">
               <LayoutGrid className="w-7 h-7 text-slate-300 dark:text-slate-600 mx-auto mb-2.5" />
@@ -306,7 +338,6 @@ export default function SingleGatewayPage() {
               layout={layouts as any}
               cols={COLS}
               rowHeight={ROW_H}
-              width={containerWidth}
               isDraggable={isEditMode}
               isResizable={isEditMode}
               onLayoutChange={(newLayout: any) => onLayoutChange(newLayout)}
@@ -314,6 +345,7 @@ export default function SingleGatewayPage() {
               margin={[4, 4]}
               containerPadding={[0, 0]}
               resizeHandles={["se"]}
+              resizeHandle={<CustomResizeHandle />}
             >
               {editConfig.map((item, index) => {
                 // Index khusus chart widget, konsisten dengan useWidgetChartData
