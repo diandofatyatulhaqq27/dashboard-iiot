@@ -1,8 +1,10 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useMemo } from "react";
 import { Edit2, X, Loader2, Trash2, RefreshCcw, AlertTriangle, Plus, Search, BellRing, ShieldAlert, Tag, CheckCircle2, Network, Check, ChevronDown, ChevronUp } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
-import { API_BASE, getAuthHeaders, getUserRole, getLocalUser, isReadOnlyRole } from "@/lib/api";
+import { getUserRole, getLocalUser, isReadOnlyRole } from "@/lib/api";
+import { useGateways } from "@/hooks/useGateways";
+import { useAlarms, useCreateAlarm, useUpdateAlarm, useDeleteAlarm } from "@/hooks/useAlarms";
 
 const DEFAULT_FORM = {
   gateway_id: "",
@@ -85,12 +87,7 @@ function GatewaySelect({
 }
 
 export default function AlarmsPage() {
-  const [alarms, setAlarms] = useState<any[]>([]);
-  const [gatewaysList, setGatewaysList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-
   const [editingAlarm, setEditingAlarm] = useState<any>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newAlarmForm, setNewAlarmForm] = useState({ ...DEFAULT_FORM });
@@ -100,127 +97,68 @@ export default function AlarmsPage() {
   const isReadOnly = isReadOnlyRole(userRole);
   const canViewMqttKey = userRole === "admin" || userRole === "rasindo_operator";
 
-  // Roles that can see ALL companies' data. Everyone else is scoped to their
-  // own company_id — same convention used on the monitoring page.
+  // Roles that can see ALL companies' data. Everyone else is scoped to
+  // their own company_id — same convention used on the monitoring page.
   const isCompanyScoped = !["admin", "rasindo_operator", "rasindo_user"].includes(userRole ?? "");
   const userCompanyId = String(loggedInUser?.company_id ?? "");
 
-  // Fetch gateways (already scoped to the user's own company when applicable)
-  const fetchMasterData = useCallback(async () => {
-    try {
-      const gwUrl = isCompanyScoped && userCompanyId
-        ? `${API_BASE}/gateways/?company_id=${userCompanyId}`
-        : `${API_BASE}/gateways/`;
+  // ── React Query hooks replace the old useState/useEffect/fetch trio ──
+  // Gateway list is scoped server-side (query param) when the user is
+  // company-scoped; admins/operators get the unscoped ("all") query.
+  const gatewaysQuery = useGateways(isCompanyScoped ? userCompanyId : undefined);
+  const gatewaysList = gatewaysQuery.data ?? [];
 
-      const resGw = await fetch(gwUrl, { headers: getAuthHeaders() });
-      if (resGw.ok) {
-        const gates = (await resGw.json()).data ?? [];
-        setGatewaysList(gates);
-        if (gates.length > 0) {
-          setNewAlarmForm((prev) => ({ ...prev, gateway_id: String(gates[0].gateway_id) }));
-        }
-      }
-    } catch (err) {
-      console.error("fetchMasterData error:", err);
+  const alarmsQuery = useAlarms();
+  const rawAlarms = alarmsQuery.data ?? [];
+
+  const createAlarm = useCreateAlarm();
+  const updateAlarm = useUpdateAlarm();
+  const deleteAlarm = useDeleteAlarm();
+
+  // Company-scoping for alarms: only keep alarms whose gateway_id belongs
+  // to the (already company-scoped) gatewaysList. Recomputed only when
+  // the underlying data actually changes, not on every render.
+  const alarms = useMemo(() => {
+    if (!isCompanyScoped) return rawAlarms;
+    const scopedGatewayIds = new Set<number>(gatewaysList.map((g: any) => g.gateway_id));
+    return rawAlarms.filter((a: any) => scopedGatewayIds.has(a.gateway_id));
+  }, [rawAlarms, gatewaysList, isCompanyScoped]);
+
+  const loading = gatewaysQuery.isLoading || alarmsQuery.isLoading;
+  const error = gatewaysQuery.error?.message || alarmsQuery.error?.message || null;
+  const isRefetching = gatewaysQuery.isFetching || alarmsQuery.isFetching;
+
+  const refreshAll = () => {
+    gatewaysQuery.refetch();
+    alarmsQuery.refetch();
+  };
+
+  // Default the "Bind to Gateway" field to the first available gateway
+  // once the list loads, without fighting the user's own selection.
+  React.useEffect(() => {
+    if (gatewaysList.length > 0 && !newAlarmForm.gateway_id) {
+      setNewAlarmForm((prev) => ({ ...prev, gateway_id: String(gatewaysList[0].gateway_id) }));
     }
-  }, [isCompanyScoped, userCompanyId]);
-
-  // Fetch alarms, then filter down to only alarms bound to a gateway that
-  // belongs to the user's own company (for company-scoped roles). This
-  // relies on gatewaysList already being scoped by fetchMasterData above,
-  // so an alarm only survives the filter if its gateway_id exists in the
-  // user's own company gateway set.
-  const fetchAlarms = useCallback(async (scopedGatewayIds: Set<number> | null) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const url = `${API_BASE}/alarms/recent`;
-      const res = await fetch(url, { method: "GET", cache: "no-store", headers: getAuthHeaders() });
-      if (!res.ok) throw new Error("Gagal menarik data alarm dari server.");
-      const result = await res.json();
-      const rawAlarms: any[] = result.data ?? [];
-
-      const scopedAlarms = scopedGatewayIds
-        ? rawAlarms.filter((a) => scopedGatewayIds.has(a.gateway_id))
-        : rawAlarms;
-
-      setAlarms(scopedAlarms);
-    } catch (err: any) {
-      setError(err.message ?? "Terjadi kesalahan.");
-      setAlarms([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Orchestrate: gateways must be loaded first so we know which gateway_ids
-  // belong to this user's company before we filter the alarm list.
-  const refreshAll = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const gwUrl = isCompanyScoped && userCompanyId
-        ? `${API_BASE}/gateways/?company_id=${userCompanyId}`
-        : `${API_BASE}/gateways/`;
-
-      const resGw = await fetch(gwUrl, { headers: getAuthHeaders() });
-      const gates = resGw.ok ? ((await resGw.json()).data ?? []) : [];
-      setGatewaysList(gates);
-      if (gates.length > 0) {
-        setNewAlarmForm((prev) => (prev.gateway_id ? prev : { ...prev, gateway_id: String(gates[0].gateway_id) }));
-      }
-
-      const scopedGatewayIds = isCompanyScoped ? new Set<number>(gates.map((g: any) => g.gateway_id)) : null;
-
-      const resAlarm = await fetch(`${API_BASE}/alarms/recent`, { method: "GET", cache: "no-store", headers: getAuthHeaders() });
-      if (!resAlarm.ok) throw new Error("Gagal menarik data alarm dari server.");
-      const result = await resAlarm.json();
-      const rawAlarms: any[] = result.data ?? [];
-
-      const scopedAlarms = scopedGatewayIds
-        ? rawAlarms.filter((a) => scopedGatewayIds.has(a.gateway_id))
-        : rawAlarms;
-
-      setAlarms(scopedAlarms);
-    } catch (err: any) {
-      setError(err.message ?? "Terjadi kesalahan.");
-      setAlarms([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [isCompanyScoped, userCompanyId]);
-
-  useEffect(() => {
-    refreshAll();
-  }, [refreshAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gatewaysList]);
 
   const handleCreateAlarm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isReadOnly) return alert("Akses ditolak!");
 
     try {
-      const res = await fetch(`${API_BASE}/alarms/`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          gateway_id: parseInt(newAlarmForm.gateway_id, 10),
-          mqtt_key: newAlarmForm.mqtt_key.trim(),
-          name: newAlarmForm.name.trim(),
-          message: newAlarmForm.message.trim(),
-        }),
+      await createAlarm.mutateAsync({
+        gateway_id: parseInt(newAlarmForm.gateway_id, 10),
+        mqtt_key: newAlarmForm.mqtt_key.trim(),
+        name: newAlarmForm.name.trim(),
+        message: newAlarmForm.message.trim(),
       });
-
-      if (res.ok) {
-        alert("Master konfigurasi alarm berhasil didaftarkan!");
-        setIsCreateModalOpen(false);
-        setNewAlarmForm({ ...DEFAULT_FORM, gateway_id: gatewaysList[0]?.gateway_id ? String(gatewaysList[0].gateway_id) : "" });
-        refreshAll();
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        alert(errData?.detail ?? "Gagal mendaftarkan alarm baru.");
-      }
-    } catch { alert("Gagal berkomunikasi dengan server."); }
+      alert("Master konfigurasi alarm berhasil didaftarkan!");
+      setIsCreateModalOpen(false);
+      setNewAlarmForm({ ...DEFAULT_FORM, gateway_id: gatewaysList[0]?.gateway_id ? String(gatewaysList[0].gateway_id) : "" });
+    } catch (err: any) {
+      alert(err.message ?? "Gagal mendaftarkan alarm baru.");
+    }
   };
 
   const handleUpdateAlarm = async (e: React.FormEvent) => {
@@ -228,53 +166,41 @@ export default function AlarmsPage() {
     if (isReadOnly) return alert("Akses ditolak!");
 
     try {
-      const res = await fetch(`${API_BASE}/alarms/${editingAlarm.id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
+      await updateAlarm.mutateAsync({
+        id: editingAlarm.id,
+        payload: {
           gateway_id: parseInt(String(editingAlarm.gateway_id), 10),
           mqtt_key: editingAlarm.mqtt_key.trim(),
           name: editingAlarm.name?.trim() ?? "",
           message: editingAlarm.message.trim(),
           severity: editingAlarm.severity || "CRITICAL",
           status: editingAlarm.status || "ACTIVE",
-        }),
+        },
       });
-
-      if (res.ok) {
-        alert("Konfigurasi Alarm Berhasil Diperbarui!");
-        setEditingAlarm(null);
-        refreshAll();
-      } else {
-        alert("Gagal memperbarui konfigurasi sistem alarm.");
-      }
-    } catch { alert("Terjadi kesalahan koneksi."); }
+      alert("Konfigurasi Alarm Berhasil Diperbarui!");
+      setEditingAlarm(null);
+    } catch {
+      alert("Gagal memperbarui konfigurasi sistem alarm.");
+    }
   };
 
   const handleVerifyAlarm = async (alarm: any) => {
     if (isReadOnly) return alert("Akses ditolak!");
 
     try {
-      const res = await fetch(`${API_BASE}/alarms/${alarm.id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
+      await updateAlarm.mutateAsync({
+        id: alarm.id,
+        payload: {
           gateway_id: alarm.gateway_id,
           mqtt_key: alarm.mqtt_key,
           name: alarm.name ?? "",
           message: alarm.message,
           severity: "NORMAL",
           status: "RESOLVED",
-        }),
+        },
       });
-
-      if (res.ok) {
-        refreshAll();
-      } else {
-        alert("Gagal memverifikasi alarm.");
-      }
     } catch {
-      alert("Terjadi masalah koneksi.");
+      alert("Gagal memverifikasi alarm.");
     }
   };
 
@@ -283,22 +209,19 @@ export default function AlarmsPage() {
     if (!confirm(`Hapus master konfigurasi alarm: "${name}"?`)) return;
 
     try {
-      const res = await fetch(`${API_BASE}/alarms/${alarmId}`, { method: "DELETE", headers: getAuthHeaders() });
-      if (res.ok) {
-        alert("Master konfigurasi alarm berhasil dihapus dari sistem!");
-        refreshAll();
-      } else {
-        alert("Gagal menghapus master alarm dari database.");
-      }
-    } catch { alert("Terjadi kesalahan koneksi ke server."); }
+      await deleteAlarm.mutateAsync(alarmId);
+      alert("Master konfigurasi alarm berhasil dihapus dari sistem!");
+    } catch {
+      alert("Gagal menghapus master alarm dari database.");
+    }
   };
 
   const getGatewayName = (gatewayId: number) => {
-    const gw = gatewaysList.find((g) => g.gateway_id === gatewayId);
+    const gw = gatewaysList.find((g: any) => g.gateway_id === gatewayId);
     return gw ? gw.name.toUpperCase() : `GATEWAY ID: ${gatewayId}`;
   };
 
-  const filteredAlarms = alarms.filter((alarm) => {
+  const filteredAlarms = alarms.filter((alarm: any) => {
     const q = searchQuery.toLowerCase();
     return (
       (alarm.name ?? "").toLowerCase().includes(q) ||
@@ -339,7 +262,7 @@ export default function AlarmsPage() {
           )}
 
           <button onClick={refreshAll} className="p-2.5 bg-slate-50 dark:bg-slate-900/80 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border-none cursor-pointer">
-            <RefreshCcw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCcw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${isRefetching ? "animate-spin" : ""}`} />
           </button>
         </div>
 
@@ -483,7 +406,9 @@ export default function AlarmsPage() {
               </div>
               <div className="pt-3 flex gap-2">
                 <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-900 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest border-none cursor-pointer">Batal</button>
-                <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700">Trigger Alarm</button>
+                <button type="submit" disabled={createAlarm.isPending} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 disabled:opacity-60">
+                  {createAlarm.isPending ? "Menyimpan..." : "Trigger Alarm"}
+                </button>
               </div>
             </form>
           </div>
@@ -527,7 +452,9 @@ export default function AlarmsPage() {
               </div>
               <div className="pt-3 flex gap-2">
                 <button type="button" onClick={() => setEditingAlarm(null)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-900 text-slate-500 rounded-xl text-[9px] font-black uppercase tracking-widest border-none cursor-pointer">Batal</button>
-                <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700">Update Alarm</button>
+                <button type="submit" disabled={updateAlarm.isPending} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 disabled:opacity-60">
+                  {updateAlarm.isPending ? "Menyimpan..." : "Update Alarm"}
+                </button>
               </div>
             </form>
           </div>
