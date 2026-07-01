@@ -8,6 +8,15 @@ import { WidgetItem } from "@/lib/widget-config";
  * `refetchInterval` mirrors the old 5s polling on the detail page; omit it
  * on pages that only need a one-shot fetch.
  */
+/** Thrown by useGatewayDetail when the gateway genuinely doesn't exist (404),
+ *  so pages can tell "not found" apart from a transient network/server error. */
+export class GatewayNotFoundError extends Error {
+  constructor() {
+    super("Gateway tidak ditemukan.");
+    this.name = "GatewayNotFoundError";
+  }
+}
+
 export function useGatewayDetail(
   gatewayId?: string | number,
   options?: { refetchInterval?: number }
@@ -19,6 +28,7 @@ export function useGatewayDetail(
         cache: "no-store",
         headers: getAuthHeaders(),
       });
+      if (res.status === 404) throw new GatewayNotFoundError();
       if (!res.ok) throw new Error("Gagal mengambil data gateway.");
       const r = await res.json();
       return r.data as any;
@@ -27,6 +37,10 @@ export function useGatewayDetail(
     // Live-ish data, but no need to hammer the server between polls.
     staleTime: 4_000,
     refetchInterval: options?.refetchInterval,
+    // Don't retry a genuine 404 — retrying won't make a deleted gateway
+    // reappear, it'll just delay showing the not-found state.
+    retry: (failureCount, error) =>
+      error instanceof GatewayNotFoundError ? false : failureCount < 3,
   });
 }
 

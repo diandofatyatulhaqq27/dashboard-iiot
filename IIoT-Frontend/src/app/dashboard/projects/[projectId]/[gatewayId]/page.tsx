@@ -16,6 +16,7 @@ import {
   useProjectGateways,
   useWidgetChartData,
   useUpdateGatewayConfig,
+  GatewayNotFoundError,
 } from "@/hooks/useGatewayDetail";
 
 const COLS  = 80;
@@ -88,7 +89,7 @@ export default function GatewayDetailPage() {
   const isReadOnly = isReadOnlyRole(getLocalUser()?.role);
 
   // ── Server state (React Query) ────────────────────────────────────────────
-  const { data: gatewayInfo, isLoading: gatewayLoading } = useGatewayDetail(gatewayId, {
+  const { data: gatewayInfo, isLoading: gatewayLoading, error: gatewayError } = useGatewayDetail(gatewayId, {
     refetchInterval: 5000, // same cadence as the old polling loop
   });
   const { data: projectGateways = [] } = useProjectGateways(projectId, { refetchInterval: 5000 });
@@ -224,6 +225,29 @@ export default function GatewayDetailPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
         <p className="mt-3 text-[9px] font-black text-slate-400 uppercase tracking-widest">Syncing telemetry...</p>
+      </div>
+    );
+  }
+
+  // ── Gateway not found (deleted, or the project's link is stale) ────────────
+  if (gatewayError instanceof GatewayNotFoundError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 px-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 flex items-center justify-center mb-4">
+          <Cpu className="w-7 h-7 text-rose-500" />
+        </div>
+        <h1 className="text-2xl font-black tracking-tighter text-slate-800 dark:text-slate-100 uppercase italic">
+          404 · Gateway Tidak Ditemukan
+        </h1>
+        <p className="mt-2 max-w-sm text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+          Gateway #{gatewayId} sudah tidak tersedia. Kemungkinan sudah dihapus, atau link project ini mengarah ke gateway yang lama.
+        </p>
+        <button
+          onClick={() => router.push(`/dashboard/projects/${projectId}`)}
+          className="mt-6 flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer border-none shadow"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Kembali ke Project
+        </button>
       </div>
     );
   }
