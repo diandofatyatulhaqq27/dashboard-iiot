@@ -312,7 +312,7 @@ export default function SingleGatewayPage() {
               isResizable={isEditMode}
               onLayoutChange={(newLayout: any) => onLayoutChange(newLayout)}
               draggableHandle=".drag-handle"
-              margin={[12, 12]}
+              margin={[4, 4]}
               containerPadding={[0, 0]}
               resizeHandles={["se"]}
             >
