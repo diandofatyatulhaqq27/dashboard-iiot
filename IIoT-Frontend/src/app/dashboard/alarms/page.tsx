@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Edit2, X, Loader2, Trash2, RefreshCcw, AlertTriangle, Plus, Search, BellRing, ShieldAlert, Tag, CheckCircle2, Network, Check, ChevronDown, ChevronUp } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
-import { API_BASE, getAuthHeaders, getUserRole, isReadOnlyRole } from "@/lib/api";
+import { API_BASE, getAuthHeaders, getUserRole, getLocalUser, isReadOnlyRole } from "@/lib/api";
 
 const DEFAULT_FORM = {
   gateway_id: "",
@@ -95,30 +95,24 @@ export default function AlarmsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newAlarmForm, setNewAlarmForm] = useState({ ...DEFAULT_FORM });
 
+  const loggedInUser = getLocalUser();
   const userRole = getUserRole();
   const isReadOnly = isReadOnlyRole(userRole);
   const canViewMqttKey = userRole === "admin" || userRole === "rasindo_operator";
 
-  const fetchAlarms = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const url = `${API_BASE}/alarms/recent`;
-      const res = await fetch(url, { method: "GET", cache: "no-store", headers: getAuthHeaders() });
-      if (!res.ok) throw new Error("Gagal menarik data alarm dari server.");
-      const result = await res.json();
-      setAlarms(result.data ?? []);
-    } catch (err: any) {
-      setError(err.message ?? "Terjadi kesalahan.");
-      setAlarms([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Roles that can see ALL companies' data. Everyone else is scoped to their
+  // own company_id — same convention used on the monitoring page.
+  const isCompanyScoped = !["admin", "rasindo_operator", "rasindo_user"].includes(userRole ?? "");
+  const userCompanyId = String(loggedInUser?.company_id ?? "");
 
+  // Fetch gateways (already scoped to the user's own company when applicable)
   const fetchMasterData = useCallback(async () => {
     try {
-      const resGw = await fetch(`${API_BASE}/gateways/`, { headers: getAuthHeaders() });
+      const gwUrl = isCompanyScoped && userCompanyId
+        ? `${API_BASE}/gateways/?company_id=${userCompanyId}`
+        : `${API_BASE}/gateways/`;
+
+      const resGw = await fetch(gwUrl, { headers: getAuthHeaders() });
       if (resGw.ok) {
         const gates = (await resGw.json()).data ?? [];
         setGatewaysList(gates);
@@ -129,12 +123,77 @@ export default function AlarmsPage() {
     } catch (err) {
       console.error("fetchMasterData error:", err);
     }
+  }, [isCompanyScoped, userCompanyId]);
+
+  // Fetch alarms, then filter down to only alarms bound to a gateway that
+  // belongs to the user's own company (for company-scoped roles). This
+  // relies on gatewaysList already being scoped by fetchMasterData above,
+  // so an alarm only survives the filter if its gateway_id exists in the
+  // user's own company gateway set.
+  const fetchAlarms = useCallback(async (scopedGatewayIds: Set<number> | null) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const url = `${API_BASE}/alarms/recent`;
+      const res = await fetch(url, { method: "GET", cache: "no-store", headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Gagal menarik data alarm dari server.");
+      const result = await res.json();
+      const rawAlarms: any[] = result.data ?? [];
+
+      const scopedAlarms = scopedGatewayIds
+        ? rawAlarms.filter((a) => scopedGatewayIds.has(a.gateway_id))
+        : rawAlarms;
+
+      setAlarms(scopedAlarms);
+    } catch (err: any) {
+      setError(err.message ?? "Terjadi kesalahan.");
+      setAlarms([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  // Orchestrate: gateways must be loaded first so we know which gateway_ids
+  // belong to this user's company before we filter the alarm list.
+  const refreshAll = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const gwUrl = isCompanyScoped && userCompanyId
+        ? `${API_BASE}/gateways/?company_id=${userCompanyId}`
+        : `${API_BASE}/gateways/`;
+
+      const resGw = await fetch(gwUrl, { headers: getAuthHeaders() });
+      const gates = resGw.ok ? ((await resGw.json()).data ?? []) : [];
+      setGatewaysList(gates);
+      if (gates.length > 0) {
+        setNewAlarmForm((prev) => (prev.gateway_id ? prev : { ...prev, gateway_id: String(gates[0].gateway_id) }));
+      }
+
+      const scopedGatewayIds = isCompanyScoped ? new Set<number>(gates.map((g: any) => g.gateway_id)) : null;
+
+      const resAlarm = await fetch(`${API_BASE}/alarms/recent`, { method: "GET", cache: "no-store", headers: getAuthHeaders() });
+      if (!resAlarm.ok) throw new Error("Gagal menarik data alarm dari server.");
+      const result = await resAlarm.json();
+      const rawAlarms: any[] = result.data ?? [];
+
+      const scopedAlarms = scopedGatewayIds
+        ? rawAlarms.filter((a) => scopedGatewayIds.has(a.gateway_id))
+        : rawAlarms;
+
+      setAlarms(scopedAlarms);
+    } catch (err: any) {
+      setError(err.message ?? "Terjadi kesalahan.");
+      setAlarms([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [isCompanyScoped, userCompanyId]);
+
   useEffect(() => {
-    fetchAlarms();
-    fetchMasterData();
-  }, [fetchAlarms, fetchMasterData]);
+    refreshAll();
+  }, [refreshAll]);
 
   const handleCreateAlarm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,7 +215,7 @@ export default function AlarmsPage() {
         alert("Master konfigurasi alarm berhasil didaftarkan!");
         setIsCreateModalOpen(false);
         setNewAlarmForm({ ...DEFAULT_FORM, gateway_id: gatewaysList[0]?.gateway_id ? String(gatewaysList[0].gateway_id) : "" });
-        fetchAlarms();
+        refreshAll();
       } else {
         const errData = await res.json().catch(() => ({}));
         alert(errData?.detail ?? "Gagal mendaftarkan alarm baru.");
@@ -185,7 +244,7 @@ export default function AlarmsPage() {
       if (res.ok) {
         alert("Konfigurasi Alarm Berhasil Diperbarui!");
         setEditingAlarm(null);
-        fetchAlarms();
+        refreshAll();
       } else {
         alert("Gagal memperbarui konfigurasi sistem alarm.");
       }
@@ -210,7 +269,7 @@ export default function AlarmsPage() {
       });
 
       if (res.ok) {
-        fetchAlarms();
+        refreshAll();
       } else {
         alert("Gagal memverifikasi alarm.");
       }
@@ -227,7 +286,7 @@ export default function AlarmsPage() {
       const res = await fetch(`${API_BASE}/alarms/${alarmId}`, { method: "DELETE", headers: getAuthHeaders() });
       if (res.ok) {
         alert("Master konfigurasi alarm berhasil dihapus dari sistem!");
-        fetchAlarms();
+        refreshAll();
       } else {
         alert("Gagal menghapus master alarm dari database.");
       }
@@ -279,7 +338,7 @@ export default function AlarmsPage() {
             </button>
           )}
 
-          <button onClick={fetchAlarms} className="p-2.5 bg-slate-50 dark:bg-slate-900/80 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border-none cursor-pointer">
+          <button onClick={refreshAll} className="p-2.5 bg-slate-50 dark:bg-slate-900/80 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border-none cursor-pointer">
             <RefreshCcw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
