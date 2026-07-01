@@ -1,9 +1,12 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Edit2, X, Loader2, Trash2, RefreshCcw, AlertTriangle, Plus, HardDrive, Search, Eye, FolderKanban, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Edit2, X, Loader2, Trash2, RefreshCcw, AlertTriangle, Plus, HardDrive, Search, Eye, FolderKanban, Check, ChevronDown, ChevronUp, } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
-import { API_BASE, getAuthHeaders, getLocalUser, isReadOnlyRole } from "@/lib/api";
+import { getLocalUser, isReadOnlyRole } from "@/lib/api";
+
+import { useGateways, useCreateGateway, useUpdateGateway, useDeleteGateway } from "@/hooks/useGateways";
+import { useProjects } from "@/hooks/useProjects";
 
 const DEFAULT_FORM = {
   hmi_code: "",
@@ -74,76 +77,58 @@ function ProjectSelect({
 export default function GatewaysPage() {
   const router = useRouter();
 
-  const [gateways, setGateways] = useState<any[]>([]);
-  const [projectsList, setProjectsList] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const loggedInUser  = getLocalUser();
+  const userRole      = loggedInUser?.role ?? "client_user";
+  const userCompanyId = String(loggedInUser?.company_id ?? "");
+  const isCompanyScoped = !["admin", "rasindo_operator", "rasindo_user"].includes(userRole);
 
+  const gatewaysQuery = useGateways(isCompanyScoped ? userCompanyId : undefined);
+
+  // NOTE: the original page's fetchMasterData() always fetched the
+  // UNSCOPED project list (`/projects/`, no company_id) regardless of
+  // role, purely to populate the ProjectSelect dropdown. useProjects()
+  // scopes for any role other than "admin", so a company-scoped user
+  // will now only see their own projects in the dropdown instead of
+  // every project in the system. That's arguably the more correct
+  // behavior (a client user probably shouldn't be binding a gateway to
+  // another tenant's project anyway), but it IS a behavior change from
+  // the original — flagging it in case it wasn't intentional.
+  const projectsQuery = useProjects();
+
+  const createGateway = useCreateGateway();
+  const updateGateway = useUpdateGateway();
+  const deleteGateway = useDeleteGateway();
+
+  const projectsList = projectsQuery.data ?? [];
+
+  const gateways = useMemo(() => {
+    const raw = gatewaysQuery.data ?? [];
+    return [...raw].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [gatewaysQuery.data]);
+
+  const loading = gatewaysQuery.isLoading;
+  const error = gatewaysQuery.error?.message ?? null;
+
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingGateway, setEditingGateway] = useState<any>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newGatewayForm, setNewGatewayForm] = useState({ ...DEFAULT_FORM });
 
   const isReadOnly = isReadOnlyRole(getLocalUser()?.role);
 
-  // ─── 1. FETCH GATEWAYS ──────────────────────────────────────────────────
-  const fetchGateways = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const currentUser = getLocalUser();
-      const currentRole: string = currentUser?.role ?? "client_user";
-      const currentCompanyId: string = String(currentUser?.company_id ?? "");
-
-      let url = `${API_BASE}/gateways/`;
-      if (
-        currentRole !== "admin" &&
-        currentRole !== "rasindo_operator" &&
-        currentRole !== "rasindo_user" &&
-        currentCompanyId
-      ) {
-        url += `?company_id=${currentCompanyId}`;
-      }
-
-      const res = await fetch(url, { method: "GET", cache: "no-store", headers: getAuthHeaders() });
-
-      if (!res.ok) throw new Error(`Gagal menarik data hardware. Status: ${res.status}`);
-
-      const result = await res.json();
-      const sorted = [...(result.data ?? [])].sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-      setGateways(sorted);
-    } catch (err: any) {
-      setError(err.message ?? "Terjadi kesalahan.");
-      setGateways([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // ─── 2. FETCH MASTER DATA ────────────────────────────────────────────────
-  const fetchMasterData = useCallback(async () => {
-    try {
-      const resProj = await fetch(`${API_BASE}/projects/`, { headers: getAuthHeaders() });
-      if (resProj.ok) {
-        const r = await resProj.json();
-        const projs = r.data ?? [];
-        setProjectsList(projs);
-        if (projs.length > 0) {
-          setNewGatewayForm((prev) => ({ ...prev, project_id: String(projs[0].project_id) }));
-        }
-      }
-    } catch (err) {
-      console.error("fetchMasterData error:", err);
-    }
-  }, []);
-
+  // Default the create-form's project_id to the first project once the
+  // projects list loads — mirrors the old fetchMasterData behavior.
   useEffect(() => {
-    fetchGateways();
-    fetchMasterData();
-  }, [fetchGateways, fetchMasterData]);
+    if (projectsList.length > 0 && !newGatewayForm.project_id) {
+      setNewGatewayForm((prev) => ({
+        ...prev,
+        project_id: String(projectsList[0].project_id),
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectsList]);
 
-  // ─── 3. CREATE ───────────────────────────────────────────────────────────
+  // ─── CREATE ───────────────────────────────────────────────────────────
   const handleCreateGateway = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isReadOnly) return alert("Akses ditolak!");
@@ -151,67 +136,56 @@ export default function GatewaysPage() {
     if (!newGatewayForm.project_id) return alert("Pilih project terlebih dahulu.");
 
     try {
-      const res = await fetch(`${API_BASE}/gateways/`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          hmi_code: newGatewayForm.hmi_code.trim().toUpperCase() || null,
-          name: newGatewayForm.name.trim(),
-          project_id: parseInt(newGatewayForm.project_id, 10),
-          status: "offline",
-        }),
+      await createGateway.mutateAsync({
+        hmi_code: newGatewayForm.hmi_code.trim().toUpperCase() || null,
+        name: newGatewayForm.name.trim(),
+        project_id: parseInt(newGatewayForm.project_id, 10),
+        status: "offline",
       });
-
-      if (res.ok) {
-        alert("IoT Gateway Terminal Berhasil Didaftarkan!");
-        setIsCreateModalOpen(false);
-        setNewGatewayForm({ ...DEFAULT_FORM, project_id: projectsList[0]?.project_id ? String(projectsList[0].project_id) : "" });
-        fetchGateways();
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        alert(errData?.detail ?? "Gagal mendaftarkan gateway.");
-      }
-    } catch { alert("Gagal berkomunikasi dengan server."); }
+      alert("IoT Gateway Terminal Berhasil Didaftarkan!");
+      setIsCreateModalOpen(false);
+      setNewGatewayForm({
+        ...DEFAULT_FORM,
+        project_id: projectsList[0]?.project_id ? String(projectsList[0].project_id) : "",
+      });
+    } catch (err: any) {
+      alert(err.message ?? "Gagal mendaftarkan gateway.");
+    }
   };
 
-  // ─── 4. UPDATE ───────────────────────────────────────────────────────────
+  // ─── UPDATE ───────────────────────────────────────────────────────────
   const handleUpdateGateway = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isReadOnly) return alert("Akses ditolak!");
     if (!editingGateway?.gateway_id) return;
 
     try {
-      const res = await fetch(`${API_BASE}/gateways/${editingGateway.gateway_id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
+      await updateGateway.mutateAsync({
+        id: editingGateway.gateway_id,
+        payload: {
           hmi_code: editingGateway.hmi_code?.trim() || null,
           name: editingGateway.name.trim(),
           project_id: editingGateway.project_id ? parseInt(String(editingGateway.project_id), 10) : null,
           status: editingGateway.status,
-        }),
+        },
       });
-
-      if (res.ok) {
-        alert("Konfigurasi hardware terminal berhasil diperbarui!");
-        setEditingGateway(null);
-        fetchGateways();
-      } else {
-        alert("Gagal memperbarui hardware.");
-      }
-    } catch { alert("Terjadi kesalahan koneksi saat memperbarui data."); }
+      alert("Konfigurasi hardware terminal berhasil diperbarui!");
+      setEditingGateway(null);
+    } catch {
+      alert("Gagal memperbarui hardware.");
+    }
   };
 
-  // ─── 5. DELETE ───────────────────────────────────────────────────────────
+  // ─── DELETE ───────────────────────────────────────────────────────────
   const handleDelete = async (gatewayId: number, displayName: string) => {
     if (isReadOnly) return alert("Akses ditolak!");
     if (!confirm(`Hapus Gateway "${displayName}"? Koneksi MQTT terminal ini akan terputus permanen.`)) return;
 
     try {
-      const res = await fetch(`${API_BASE}/gateways/${gatewayId}`, { method: "DELETE", headers: getAuthHeaders() });
-      if (res.ok) fetchGateways();
-      else alert("Gagal menghapus gateway.");
-    } catch { alert("Terjadi kesalahan koneksi."); }
+      await deleteGateway.mutateAsync(gatewayId);
+    } catch {
+      alert("Gagal menghapus gateway.");
+    }
   };
 
   // ─── FILTER ──────────────────────────────────────────────────────────────
@@ -252,10 +226,10 @@ export default function GatewaysPage() {
           )}
 
           <button
-            onClick={fetchGateways}
+            onClick={() => gatewaysQuery.refetch()}
             className="p-2.5 bg-slate-50 dark:bg-slate-900/80 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all border-none cursor-pointer"
           >
-            <RefreshCcw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCcw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${gatewaysQuery.isFetching ? "animate-spin" : ""}`} />
           </button>
         </div>
 
@@ -378,7 +352,14 @@ export default function GatewaysPage() {
               </div>
               <div className="pt-2 flex gap-2">
                 <button type="button" onClick={() => setIsCreateModalOpen(false)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl text-[9px] font-black uppercase tracking-widest border-none cursor-pointer">Batal</button>
-                <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 transition-all">Register Link</button>
+                <button
+                  type="submit"
+                  disabled={createGateway.isPending}
+                  className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  {createGateway.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Register Link
+                </button>
               </div>
             </form>
           </div>
@@ -417,7 +398,14 @@ export default function GatewaysPage() {
               </div>
               <div className="pt-3 flex gap-2">
                 <button type="button" onClick={() => setEditingGateway(null)} className="flex-1 py-3 bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 rounded-xl text-[9px] font-black uppercase tracking-widest border-none cursor-pointer">Batal</button>
-                <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 transition-all">Update Hardware</button>
+                <button
+                  type="submit"
+                  disabled={updateGateway.isPending}
+                  className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl text-[9px] uppercase shadow-lg border-none tracking-[0.2em] cursor-pointer hover:bg-blue-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  {updateGateway.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Update Hardware
+                </button>
               </div>
             </form>
           </div>

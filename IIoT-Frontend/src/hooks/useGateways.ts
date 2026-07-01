@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE, getAuthHeaders } from "@/lib/api";
 
 /**
@@ -32,5 +32,74 @@ export function useGateways(companyId?: string, options?: { refetchInterval?: nu
     // Optional live polling (e.g. dashboard wants updates every 10s).
     // Omit this option on pages that don't need it.
     refetchInterval: options?.refetchInterval,
+  });
+}
+
+export function useCreateGateway() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      hmi_code: string | null;
+      name: string;
+      project_id: number;
+      status: string;
+    }) => {
+      const res = await fetch(`${API_BASE}/gateways/`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.detail ?? "Gagal mendaftarkan gateway.");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      // Invalidates every ["gateways", ...] cache bucket regardless of
+      // which company_id key it was stored under.
+      queryClient.invalidateQueries({ queryKey: ["gateways"] });
+    },
+  });
+}
+
+export function useUpdateGateway() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: Record<string, any> }) => {
+      const res = await fetch(`${API_BASE}/gateways/${id}`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Gagal memperbarui hardware.");
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["gateways"] });
+    },
+  });
+}
+
+export function useDeleteGateway() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`${API_BASE}/gateways/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) throw new Error("Gagal menghapus gateway.");
+
+      return res.json().catch(() => ({}));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["gateways"] });
+    },
   });
 }
