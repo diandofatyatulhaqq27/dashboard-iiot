@@ -1,5 +1,6 @@
 "use client";
-import { API_BASE, getAuthHeaders, getLocalUser } from "@/lib/api";
+import { getLocalUser } from "@/lib/api";
+import { useProjects } from "@/hooks/useProjects";
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
@@ -34,9 +35,17 @@ export function AssetMap({ isFullScreen, showSearch = false, onSelectLocation }:
 
   const { resolvedTheme } = useTheme();
 
-  const [sensors, setSensors] = useState<Sensor[]>([]);
+  // ─── 1. DATA PROJECT — via React Query (was: useState + useEffect + setInterval) ──
+  // Cached under queryKey ["projects", ...] — shared with any other page/
+  // component using useProjects(), so navigating away and back to the
+  // dashboard shows cached data instantly instead of an empty map with a
+  // "Loading map topology..." spinner. refetchInterval preserves the
+  // original 5s live-polling behavior.
+  const projectsQuery = useProjects({ refetchInterval: 5_000 });
+  const sensors: Sensor[] = projectsQuery.data ?? [];
+  const loading = projectsQuery.isLoading;
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [loading, setLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -46,45 +55,15 @@ export function AssetMap({ isFullScreen, showSearch = false, onSelectLocation }:
     dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
   };
 
-  // ─── 1. FETCH DATA DARI FASTAPI ───────────────────────────────────────
-  useEffect(() => {
-    const fetchData = () => {
-      try {
-        const loggedInUser = getLocalUser();
-        const companyId = loggedInUser?.company_id || "";
-        const userRole = loggedInUser?.role || "client_user";
-
-        let url = `${API_BASE}/projects/`;
-        if (userRole !== "admin" && companyId) {
-          url = `${API_BASE}/projects/?company_id=${companyId}`;
-        }
-
-        fetch(url, { method: "GET", cache: "no-store", headers: getAuthHeaders() })
-          .then((res) => {
-            if (!res.ok) throw new Error("Backend menolak permintaan atau sesi tidak sah");
-            return res.json();
-          })
-          .then((result) => {
-            const projectArray = result.data || [];
-            setSensors(Array.isArray(projectArray) ? projectArray : []);
-          })
-          .catch((err) => {
-            console.error("Gagal sinkronisasi data project:", err);
-            setSensors([]);
-          })
-          .finally(() => setLoading(false));
-      } catch (e) {
-        console.error("Error membaca localStorage:", e);
-        setSensors([]);
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   // ─── 2. INISIALISASI PETA DASAR ──────────────────────────────────────
+  // NOTE: this still creates a brand-new maplibregl.Map instance every
+  // time this component mounts, and destroys it on unmount. That part is
+  // unrelated to data fetching — it's a component lifecycle issue (the
+  // map resets camera/zoom and reloads tiles whenever you navigate away
+  // and back to a page that renders <AssetMap />). Fixing that would
+  // require keeping AssetMap mounted persistently (e.g. in a layout)
+  // instead of inside a page that unmounts on navigation — a separate,
+  // bigger architectural change from the data-caching fix applied here.
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
