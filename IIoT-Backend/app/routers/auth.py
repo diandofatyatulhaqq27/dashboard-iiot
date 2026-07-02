@@ -1,6 +1,6 @@
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import BackgroundTasks
 from app.models import PasswordReset
 from app.email_service import send_reset_email
@@ -196,7 +196,12 @@ async def forgot_password(
 
     # Generate token baru
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(minutes=15)
+    # ⚠️ Pakai datetime timezone-aware (UTC) secara konsisten — kalau kolom
+    # expires_at di DB bertipe TIMESTAMPTZ, SQLAlchemy akan mengembalikan
+    # datetime aware saat dibaca lagi. Membandingkannya dengan datetime naive
+    # (datetime.utcnow()) akan raise TypeError dan bikin endpoint reset-password
+    # crash dengan 500.
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
     db_reset = PasswordReset(
         email=payload.email,
@@ -234,7 +239,18 @@ def reset_password(payload: ResetPasswordSchema, db: Session = Depends(get_db)):
     if not db_reset:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
 
-    if datetime.utcnow() > db_reset.expires_at:
+    # ⚠️ FIX: gunakan datetime.now(timezone.utc) (aware), bukan datetime.utcnow()
+    # (naive). db_reset.expires_at bisa jadi timezone-aware kalau kolomnya
+    # TIMESTAMPTZ, dan Python nggak bisa compare aware vs naive datetime —
+    # itu yang bikin endpoint ini crash 500 sebelumnya.
+    now = datetime.now(timezone.utc)
+    expires_at = db_reset.expires_at
+    # Jaga-jaga kalau ternyata nilainya naive (kolom TIMESTAMP tanpa timezone):
+    # anggap sebagai UTC supaya perbandingan tetap valid dua arah.
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if now > expires_at:
         db.delete(db_reset)
         db.commit()
         raise HTTPException(status_code=400, detail="Reset token has expired. Please request a new one.")
