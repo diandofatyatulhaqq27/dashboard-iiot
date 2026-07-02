@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 import { Mail, Lock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Image from "next/image"; // Import Image dari Next.js
-import myLogo from '@/assets/logodragonfly2.png'; // Import aset gambar logo yang sama
+import Image from "next/image";
+import myLogo from '@/assets/logodragonfly2.png';
+import NetworkBackground from '@/components/NetworkBackground';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -48,11 +49,11 @@ export default function LoginPage() {
 
       const userData = result.user ? result.user : result;
       localStorage.setItem("iiot_user", JSON.stringify(userData));
-      
+
       if (result.access_token) {
         localStorage.setItem("iiot_token", result.access_token);
       }
-      
+
       router.push("/dashboard");
       router.refresh();
 
@@ -63,31 +64,35 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-[360px] bg-white rounded-xl border border-slate-200 shadow-xl p-6">
-          
+    <div className="relative min-h-screen bg-slate-50 flex items-center justify-center p-6 overflow-hidden">
+      {/* Ambient IIoT network background */}
+      <NetworkBackground />
+
+      {/* Login card — z-10 keeps it above the canvas */}
+      <div className="relative z-10 w-full max-w-[360px] bg-white/95 backdrop-blur-sm rounded-xl border border-slate-200 shadow-xl p-6">
+
         {/* BRANDING LOGO SECTION */}
         <div className="flex flex-col items-center text-center mb-8">
           <div className="relative w-12 h-11 rounded-lg overflow-hidden shrink-0 mb-3">
-            <Image 
-              src={myLogo} 
-              alt="Logo" 
-              fill 
-              className="object-cover" 
-              priority 
+            <Image
+              src={myLogo}
+              alt="Logo"
+              fill
+              className="object-cover"
+              priority
             />
           </div>
-          
-          <span 
+
+          <span
             className="text-2xl tracking-[0.05em] text-slate-900 dark:text-slate-900 leading-none antialiased"
             style={{ fontFamily: '"Arial Black", "Impact", sans-serif', fontWeight: 900 }}
           >
             Dragonfly<span className="text-zinc-400">.</span>
             <span className="text-blue-600">io</span>
           </span>
-          
+
           <p className="text-[9px] font-black tracking-[0.2em] text-slate-400 mt-2">
-            Your Monitoring Platform Solution 
+            Your Monitoring Platform Solution
           </p>
         </div>
 
@@ -103,9 +108,9 @@ export default function LoginPage() {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
             <div className="relative mt-1.5">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
+              <input
                 required
-                type="email" 
+                type="email"
                 className="w-full p-4 pl-12 bg-slate-50 border-none rounded-2xl text-sm outline-none focus:ring-2 ring-blue-100 text-slate-800 font-sans"
                 placeholder="name@email.com"
                 value={email}
@@ -118,20 +123,20 @@ export default function LoginPage() {
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Password</label>
             <div className="relative mt-1.5">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
+              <input
                 required
-                type="password" 
+                type="password"
                 className="w-full p-4 pl-12 bg-slate-50 border-none rounded-2xl text-sm outline-none focus:ring-2 ring-blue-100 text-slate-800 font-sans"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            
+
             {/* LINK FORGOT PASSWORD */}
             <div className="flex justify-end mt-2">
-              <Link 
-                href="/reset-password" 
+              <Link
+                href="/reset-password"
                 className="text-[13px] font-black text-blue-600 hover:underline tracking-widest"
               >
                 Forgot Password?
@@ -139,7 +144,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <button 
+          <button
             disabled={isLoading}
             className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
           >
