@@ -2,7 +2,6 @@ version: '3.8'
 
 services:
 
-  # 1. Database PostgreSQL
   db:
     image: postgres:15
     container_name: iiot_postgres_db
@@ -22,27 +21,22 @@ services:
       timeout: 5s
       retries: 5
 
-  # 2. Broker MQTT (Eclipse Mosquitto)
   mqtt_broker:
     image: eclipse-mosquitto:latest
     container_name: iiot_mqtt_broker
     restart: always
     ports:
       - "1883:1883"
-      - "9001:9001"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mqtt_data:/mosquitto/data
       - mqtt_log:/mosquitto/log
-      - ./mosquitto_passwd:/mosquitto/config/passwd
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -t '$$SYS/#' -C 1 -W 3 -u ${MQTT_USERNAME} -P ${MQTT_PASSWORD} || exit 1"]
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -p 1883 -t '$$SYS/#' -C 1 -W 3 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
-    env_file: .env
 
-  # 3. Backend FastAPI
   backend:
     build: .
     container_name: iiot_fastapi_backend
@@ -62,8 +56,7 @@ services:
       - DB_NAME=${DB_NAME}
       - MQTT_HOST=mqtt_broker
       - MQTT_PORT=1883
-      - MQTT_USERNAME=${MQTT_USERNAME}
-      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - MQTT_USE_TLS=false
       - SECRET_KEY=${SECRET_KEY}
 
 volumes:
