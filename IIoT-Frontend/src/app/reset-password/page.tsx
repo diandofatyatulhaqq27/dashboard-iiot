@@ -5,6 +5,7 @@ import { KeyRound, Loader2, CheckCircle2, Mail, ArrowLeft, AlertCircle, Eye, Eye
 import Link from 'next/link';
 import Image from 'next/image';
 import myLogo from '@/assets/logodragonfly2.png';
+import NetworkBackground from '@/components/NetworkBackground2';
 
 // ── STEP 1: User isi email ────────────────────────────────────────────────────
 function ForgotPasswordForm() {
@@ -41,8 +42,9 @@ function ForgotPasswordForm() {
 
   if (sent) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-[360px] bg-white rounded-xl border border-gray-200 shadow-lg p-8 text-center">
+      <div className="relative min-h-screen bg-gray-50 flex items-center justify-center p-6 overflow-hidden">
+        <NetworkBackground />
+        <div className="relative z-10 w-full max-w-[360px] bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-lg p-8 text-center">
           <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-5">
             <Mail className="w-7 h-7 text-blue-500" />
           </div>
@@ -72,8 +74,9 @@ function ForgotPasswordForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-[360px]">
+    <div className="relative min-h-screen bg-gray-50 flex items-center justify-center p-6 overflow-hidden">
+      <NetworkBackground />
+      <div className="relative z-10 w-full max-w-[360px]">
         <Link
           href="/login"
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6 transition-colors"
@@ -82,7 +85,7 @@ function ForgotPasswordForm() {
           Back to login
         </Link>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+        <div className="bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-lg overflow-hidden">
 
           {/* Header */}
           <div className="px-6 pt-6 pb-5 border-b border-gray-100">
@@ -199,8 +202,9 @@ function ResetPasswordForm({ token }: { token: string }) {
 
   if (isSuccess) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-[360px] bg-white rounded-xl border border-gray-200 shadow-lg p-8 text-center">
+      <div className="relative min-h-screen bg-gray-50 flex items-center justify-center p-6 overflow-hidden">
+        <NetworkBackground />
+        <div className="relative z-10 w-full max-w-[360px] bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-lg p-8 text-center">
           <div className="w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5">
             <CheckCircle2 className="w-7 h-7 text-emerald-500" />
           </div>
@@ -220,9 +224,10 @@ function ResetPasswordForm({ token }: { token: string }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-[360px]">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+    <div className="relative min-h-screen bg-gray-50 flex items-center justify-center p-6 overflow-hidden">
+      <NetworkBackground />
+      <div className="relative z-10 w-full max-w-[360px]">
+        <div className="bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-lg overflow-hidden">
 
           {/* Header */}
           <div className="px-6 pt-6 pb-5 border-b border-gray-100">

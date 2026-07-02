@@ -4,6 +4,7 @@ import { Loader2, AlertCircle, ShieldCheck, ArrowLeft, Clock } from "lucide-reac
 import Link from "next/link";
 import Image from "next/image";
 import myLogo from '@/assets/logodragonfly2.png';
+import NetworkBackground from '@/components/NetworkBackground2';
 
 export default function RegisterPage() {
   const [submitted, setSubmitted] = useState(false);
@@ -66,8 +67,9 @@ export default function RegisterPage() {
   // ── SUCCESS STATE ──────────────────────────────────────────────────────────
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-[360px] bg-white rounded-xl border border-gray-200 shadow-lg p-8 text-center">
+      <div className="relative min-h-screen bg-gray-50 flex items-center justify-center p-6 overflow-hidden">
+        <NetworkBackground />
+        <div className="relative z-10 w-full max-w-[360px] bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-lg p-8 text-center">
           <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-5">
             <Clock className="w-7 h-7 text-amber-500" />
           </div>
@@ -88,8 +90,9 @@ export default function RegisterPage() {
 
   // ── MAIN FORM ──────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-[400px]">
+    <div className="relative min-h-screen bg-gray-50 flex items-center justify-center p-6 overflow-hidden">
+      <NetworkBackground />
+      <div className="relative z-10 w-full max-w-[400px]">
 
         {/* Back to login */}
         <Link
@@ -100,7 +103,7 @@ export default function RegisterPage() {
           Back to login
         </Link>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
+        <div className="bg-white/95 backdrop-blur-sm rounded-xl border border-gray-200 shadow-lg overflow-hidden">
 
           {/* Header */}
           <div className="px-6 pt-6 pb-5 border-b border-gray-100">
